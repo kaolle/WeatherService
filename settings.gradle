@@ -1,0 +1,11 @@
+pluginManagement {
+    plugins {
+        id 'io.quarkus' version "${quarkusPlatformVersion}"
+    }
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'WeatherService'

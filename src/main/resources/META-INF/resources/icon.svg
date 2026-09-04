@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Background -->
+  <rect width="64" height="64" rx="10" fill="#0a1628"/>
+
+  <!-- Waves -->
+  <path d="M3 57 Q9 54 15 57 Q21 60 27 57 Q33 54 39 57 Q45 60 51 57 Q57 54 62 57"
+        stroke="#1e4a7a" fill="none" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Board -->
+  <ellipse cx="30" cy="51" rx="20" ry="3.5" fill="#cbd5e1"/>
+
+  <!-- Sail main body -->
+  <path d="M21 6 L55 38 L25 51 Z" fill="#38bdf8" opacity="0.92"/>
+  <!-- Sail inner highlight -->
+  <path d="M21 6 L38 22 L25 51 Z" fill="#7dd3fc" opacity="0.45"/>
+
+  <!-- Mast -->
+  <line x1="23" y1="7" x2="27" y2="50" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Boom -->
+  <line x1="25" y1="34" x2="49" y2="34" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Person: legs spread on board -->
+  <line x1="31" y1="44" x2="37" y2="50" stroke="#fb923c" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="31" y1="44" x2="23" y2="50" stroke="#fb923c" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Person: torso leaning back (classic windsurfer pose) -->
+  <line x1="31" y1="44" x2="37" y2="33" stroke="#fb923c" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Person: head -->
+  <circle cx="38" cy="30" r="3.5" fill="#fb923c"/>
+
+  <!-- Person: arms gripping boom -->
+  <line x1="36" y1="36" x2="45" y2="34" stroke="#fb923c" stroke-width="2" stroke-linecap="round"/>
+</svg>

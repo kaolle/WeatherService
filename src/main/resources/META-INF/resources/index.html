@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Windsurf Spots</title>
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0a1628; color: #e0f0ff; }
+    #app { display: flex; flex-direction: column; height: 100vh; }
+
+    #topbar { background: #0f2640; padding: 10px 14px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #1e3a5f; flex-shrink: 0; }
+    #topbar h1 { font-size: 1rem; color: #7dd3fc; white-space: nowrap; }
+    #site-title { outline: none; border-bottom: 1px dashed transparent; cursor: pointer; }
+    #site-title:hover { border-bottom-color: #7dd3fc55; }
+    #site-title:focus { border-bottom-color: #7dd3fc; cursor: text; }
+    .tb-btn { padding: 7px 14px; background: #0ea5e9; color: white; border: none; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .tb-btn:disabled { background: #1e3a5f; color: #4a6a8a; cursor: default; }
+    .tb-btn.add-active { background: #f59e0b; color: #0a1628; }
+    .map-add-cursor { cursor: crosshair !important; }
+    .add-only { display: none; }
+    .modal-add .add-only { display: block; }
+    .modal-add h2::before { content: '➕ '; }
+    #status { font-size: 0.75rem; color: #64748b; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    #map { flex: 1; min-height: 0; }
+
+    #panel { background: #0a1628; border-top: 2px solid #1e3a5f; overflow-y: auto; max-height: 40vh; flex-shrink: 0; }
+    #panel-header { padding: 8px 14px; background: #0f2640; font-size: 0.8rem; color: #64748b; border-bottom: 1px solid #1e3a5f; position: sticky; top: 0; }
+    #spot-list { padding: 8px; }
+
+    .spot-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; margin-bottom: 4px; transition: background 0.15s; }
+    .spot-row:hover, .spot-row.active { background: #0f2640; border-color: #1e3a5f; }
+    .spot-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+    .spot-name { font-size: 0.9rem; font-weight: 600; flex: 1; }
+    .spot-region { font-size: 0.72rem; color: #64748b; }
+    .spot-wind { text-align: right; font-size: 0.85rem; }
+    .spot-wind .speed { font-weight: 700; color: #7dd3fc; }
+    .spot-wind .dir { font-size: 0.7rem; color: #64748b; }
+    .spot-badge { font-size: 0.7rem; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+
+    .legend { background: #0f2640; border: 1px solid #1e3a5f; border-radius: 8px; padding: 8px 10px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    .leaflet-popup-content-wrapper { background: #0f2640; color: #e0f0ff; border: 1px solid #1e3a5f; border-radius: 10px; }
+    .leaflet-popup-tip { background: #0f2640; }
+    .leaflet-popup-content { margin: 12px 14px; min-width: 220px; }
+    .popup-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 2px; }
+    .popup-region { font-size: 0.75rem; color: #64748b; margin-bottom: 8px; }
+    .popup-wind { display: flex; gap: 14px; margin-bottom: 6px; }
+    .popup-stat .val { font-size: 1.1rem; font-weight: 700; color: #7dd3fc; }
+    .popup-stat .lbl { font-size: 0.68rem; color: #64748b; }
+    .popup-desc { font-size: 0.78rem; color: #94a3b8; line-height: 1.4; margin-top: 6px; }
+    .popup-access { font-size: 0.75rem; color: #60a5fa; margin-top: 4px; }
+    .popup-tags { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
+    .popup-tag { background: #1e2d45; color: #94a3b8; font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; }
+    .edit-btn { margin-top: 10px; width: 100%; padding: 7px; background: #1e3a5f; color: #7dd3fc; border: 1px solid #2a4a6f; border-radius: 6px; font-size: 0.8rem; cursor: pointer; }
+    .edit-btn:hover { background: #2a4a6f; }
+    .popup-meta { font-size: 0.68rem; color: #475569; margin-top: 6px; line-height: 1.5; }
+
+    /* History modal */
+    #history-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 10000; align-items: center; justify-content: center; padding: 16px; }
+    #history-overlay.open { display: flex; }
+    #history-modal { background: #0f2640; border: 1px solid #1e3a5f; border-radius: 14px; width: 100%; max-width: 480px; max-height: 85vh; display: flex; flex-direction: column; }
+    #history-header { padding: 16px 20px 12px; border-bottom: 1px solid #1e3a5f; }
+    #history-header h2 { font-size: 1rem; color: #7dd3fc; }
+    #history-list { overflow-y: auto; padding: 10px; flex: 1; }
+    .hist-entry { border: 1px solid #1e3a5f; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+    .hist-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .hist-who { font-size: 0.8rem; color: #e0f0ff; font-weight: 600; }
+    .hist-action { font-size: 0.68rem; padding: 2px 7px; border-radius: 10px; }
+    .hist-action.CREATED  { background:#22c55e22; color:#22c55e; }
+    .hist-action.UPDATED  { background:#3b82f622; color:#3b82f6; }
+    .hist-action.RESTORED { background:#f59e0b22; color:#f59e0b; }
+    .hist-date { font-size: 0.7rem; color: #475569; margin-bottom: 6px; }
+    .hist-desc { font-size: 0.75rem; color: #94a3b8; white-space: pre-wrap; word-break: break-word; max-height: 60px; overflow: hidden; }
+    .hist-restore { margin-top: 8px; width: 100%; padding: 6px; background: #1e3a5f; color: #f59e0b; border: 1px solid #f59e0b44; border-radius: 6px; font-size: 0.78rem; cursor: pointer; }
+    .hist-restore:hover { background: #2a3f5f; }
+    #history-footer { padding: 12px 20px; border-top: 1px solid #1e3a5f; }
+
+    /* Edit modal */
+    #modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 9999; align-items: center; justify-content: center; padding: 16px; }
+    #modal-overlay.open { display: flex; }
+    #modal { background: #0f2640; border: 1px solid #1e3a5f; border-radius: 14px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; padding: 20px; }
+    #modal h2 { font-size: 1rem; color: #7dd3fc; margin-bottom: 16px; }
+    .form-row { margin-bottom: 12px; }
+    .form-row label { display: block; font-size: 0.78rem; color: #94a3b8; margin-bottom: 4px; }
+    .form-row input, .form-row textarea, .form-row select { width: 100%; padding: 8px 10px; background: #0a1628; border: 1px solid #1e3a5f; border-radius: 7px; color: #e0f0ff; font-size: 0.875rem; }
+    .form-row textarea { min-height: 70px; resize: vertical; }
+    .form-row input:focus, .form-row textarea:focus, .form-row select:focus { outline: none; border-color: #0ea5e9; }
+    .form-row select option { background: #0f2640; }
+    .dirs-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .dir-cb { display: flex; align-items: center; gap: 4px; font-size: 0.8rem; cursor: pointer; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+    .btn-save { flex: 1; padding: 10px; background: #0ea5e9; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    .btn-cancel { flex: 1; padding: 10px; background: #1e3a5f; color: #94a3b8; border: none; border-radius: 8px; cursor: pointer; }
+    .wind-range { display: flex; gap: 8px; align-items: center; }
+    .wind-range input { flex: 1; }
+    .wind-range span { color: #64748b; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <h1>
+      <svg width="28" height="28" viewBox="0 0 64 64" style="vertical-align:middle;margin-right:6px">
+        <path d="M21 6 L55 38 L25 51 Z" fill="#38bdf8" opacity="0.92"/>
+        <path d="M21 6 L38 22 L25 51 Z" fill="#7dd3fc" opacity="0.5"/>
+        <line x1="23" y1="7" x2="27" y2="50" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>
+        <line x1="25" y1="34" x2="49" y2="34" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"/>
+        <ellipse cx="30" cy="51" rx="20" ry="3.5" fill="#cbd5e1"/>
+        <line x1="31" y1="44" x2="37" y2="50" stroke="#fb923c" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="31" y1="44" x2="23" y2="50" stroke="#fb923c" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="31" y1="44" x2="37" y2="33" stroke="#fb923c" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="38" cy="30" r="3.5" fill="#fb923c"/>
+        <line x1="36" y1="36" x2="45" y2="34" stroke="#fb923c" stroke-width="2" stroke-linecap="round"/>
+      </svg><span id="site-title" contenteditable="true" spellcheck="false">Windsurf Spots</span>
+    </h1>
+    <button class="tb-btn" id="locate-btn" onclick="locateMe()">📍 Min position</button>
+    <button class="tb-btn" id="add-btn" onclick="toggleAddMode()">➕ Lägg till spot</button>
+    <span id="status">Laddar…</span>
+  </div>
+  <div id="map"></div>
+  <div id="panel">
+    <div id="panel-header">Spotar i synligt område</div>
+    <div id="spot-list"></div>
+  </div>
+</div>
+
+<!-- Edit / Add modal -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h2 id="modal-title">✏️ Redigera spot</h2>
+    <input type="hidden" id="edit-id">
+    <div class="form-row add-only">
+      <label>Position (lat / lon)</label>
+      <div style="display:flex;gap:8px">
+        <input id="edit-lat" type="text" readonly style="color:#7dd3fc">
+        <input id="edit-lon" type="text" readonly style="color:#7dd3fc">
+      </div>
+    </div>
+    <div class="form-row">
+      <label>Namn</label>
+      <input id="edit-name" type="text" placeholder="Spotens namn">
+    </div>
+    <div class="form-row">
+      <label>Region / Område</label>
+      <input id="edit-region" type="text" placeholder="t.ex. Stockholms skärgård">
+    </div>
+    <div class="form-row">
+      <label>Beskrivning</label>
+      <textarea id="edit-desc" placeholder="Vad är bra med spoten? Typ av vatten, säsong…"></textarea>
+    </div>
+    <div class="form-row">
+      <label>Tillgänglighet / Hinder</label>
+      <textarea id="edit-access" placeholder="Parkering, väg till stranden, hinder…" style="min-height:50px"></textarea>
+    </div>
+    <div class="form-row">
+      <label>Spottyp</label>
+      <select id="edit-type">
+        <option value="FLAT_WATER">Flatvatten</option>
+        <option value="WAVES">Vågor</option>
+        <option value="BUMP_N_JUMP">Bump & Jump</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Svårighetsgrad</label>
+      <select id="edit-diff">
+        <option value="BEGINNER">Nybörjare</option>
+        <option value="INTERMEDIATE">Medel</option>
+        <option value="ADVANCED">Avancerad</option>
+        <option value="EXPERT">Expert</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Vindstyrka (m/s) — min / ideal / max</label>
+      <div class="wind-range">
+        <input id="edit-min" type="number" step="0.5" min="0" placeholder="Min">
+        <span>/</span>
+        <input id="edit-ideal" type="number" step="0.5" min="0" placeholder="Ideal">
+        <span>/</span>
+        <input id="edit-max" type="number" step="0.5" min="0" placeholder="Max">
+      </div>
+    </div>
+    <div class="form-row">
+      <label>Bästa vindriktningar</label>
+      <div class="dirs-grid">
+        <label class="dir-cb"><input type="checkbox" value="N"> N</label>
+        <label class="dir-cb"><input type="checkbox" value="NE"> NE</label>
+        <label class="dir-cb"><input type="checkbox" value="E"> E</label>
+        <label class="dir-cb"><input type="checkbox" value="SE"> SE</label>
+        <label class="dir-cb"><input type="checkbox" value="S"> S</label>
+        <label class="dir-cb"><input type="checkbox" value="SW"> SW</label>
+        <label class="dir-cb"><input type="checkbox" value="W"> W</label>
+        <label class="dir-cb"><input type="checkbox" value="NW"> NW</label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Avbryt</button>
+      <button class="btn-save" onclick="saveSpot()">💾 Spara</button>
+    </div>
+  </div>
+</div>
+
+<!-- History modal -->
+<div id="history-overlay">
+  <div id="history-modal">
+    <div id="history-header">
+      <h2>📋 Ändringshistorik — <span id="history-spot-name"></span></h2>
+    </div>
+    <div id="history-list"></div>
+    <div id="history-footer">
+      <button class="btn-cancel" style="width:100%" onclick="closeHistory()">Stäng</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const DEFAULT_CENTER = [58.0, 16.5];
+  const DEFAULT_ZOOM = 6;
+  const COLORS = {
+    'Utmärkt': '#22c55e', 'Bra': '#3b82f6',
+    'Godkänt': '#f97316', 'Dåligt': '#ef4444',
+    'Ingen vind / utanför intervall': '#475569'
+  };
+
+  const map = L.map('map').setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 18
+  }).addTo(map);
+
+  const legend = L.control({ position: 'bottomright' });
+  legend.onAdd = () => {
+    const div = L.DomUtil.create('div', 'legend');
+    div.innerHTML = Object.entries(COLORS)
+      .map(([k,c]) => `<div class="legend-item"><div class="legend-dot" style="background:${c}"></div>${k}</div>`)
+      .join('');
+    return div;
+  };
+  legend.addTo(map);
+
+  let allSpots = [], markers = {}, activeRow = null;
+  let addMode = false, addMarker = null;
+
+  function color(cond) { return COLORS[cond] || '#475569'; }
+
+  function fmtDate(iso) {
+    if (!iso) return null;
+    return iso.substring(0, 10); // "2025-09-03"
+  }
+
+  function metaHtml(s) {
+    const lines = [];
+    if (s.createdBy) lines.push(`Skapad av <b>${s.createdBy}</b>${s.createdAt ? ' · ' + fmtDate(s.createdAt) : ''}`);
+    if (s.updatedBy) lines.push(`Uppdaterad av <b>${s.updatedBy}</b>${s.updatedAt ? ' · ' + fmtDate(s.updatedAt) : ''}`);
+    return lines.length ? `<div class="popup-meta">${lines.join('<br>')}</div>` : '';
+  }
+
+  function makeMarker(r) {
+    const c = color(r.conditions);
+    const m = L.circleMarker([r.spot.latitude, r.spot.longitude], {
+      radius: 10, fillColor: c, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.9
+    }).addTo(map);
+    m.bindPopup(popupHtml(r));
+    m.on('click', () => { highlightRow(r.spot.id); scrollToRow(r.spot.id); });
+    return m;
+  }
+
+  function popupHtml(r) {
+    const s = r.spot, w = r.currentWind;
+    const dirs = (s.bestDirections || []).join(' · ');
+    const accessHtml = s.accessInfo ? `<div class="popup-access">🅿 ${s.accessInfo}</div>` : '';
+    return `
+      <div class="popup-name">${s.name}</div>
+      <div class="popup-region">${s.region}</div>
+      <div class="popup-wind">
+        <div class="popup-stat"><div class="val">${w.speedMs.toFixed(1)}</div><div class="lbl">m/s</div></div>
+        <div class="popup-stat"><div class="val">${w.directionLabel}</div><div class="lbl">riktning</div></div>
+        <div class="popup-stat"><div class="val" style="color:${color(r.conditions)}">${r.conditions}</div><div class="lbl">kondition</div></div>
+      </div>
+      <div class="popup-tags">
+        <span class="popup-tag">${(s.type||'').replace('_',' ').toLowerCase()}</span>
+        <span class="popup-tag">${(s.difficulty||'').toLowerCase()}</span>
+        <span class="popup-tag">Bäst: ${dirs}</span>
+        <span class="popup-tag">${s.minWindSpeed}–${s.maxWindSpeed} m/s</span>
+      </div>
+      ${s.description ? `<div class="popup-desc">${s.description}</div>` : ''}
+      ${accessHtml}
+      ${metaHtml(s)}
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+        <a class="edit-btn" style="text-decoration:none;text-align:center;flex:1;min-width:100px"
+           href="https://www.google.com/maps/dir/?api=1&destination=${s.latitude},${s.longitude}"
+           target="_blank">🗺 Vägbeskrivning</a>
+        <button class="edit-btn" style="flex:1;min-width:80px" onclick="openEdit('${s.id}')">✏️ Redigera</button>
+        <button class="edit-btn" style="flex:1;min-width:80px;color:#f59e0b;border-color:#f59e0b44" onclick="openHistory('${s.id}','${s.name.replace(/'/g,"\\'")}')">📋 Historik</button>
+      </div>`;
+  }
+
+  function spotRowHtml(r) {
+    const s = r.spot, w = r.currentWind;
+    const c = color(r.conditions);
+    return `
+      <div class="spot-row" id="row-${s.id}" onclick="focusSpot('${s.id}')">
+        <div class="spot-dot" style="background:${c}"></div>
+        <div style="flex:1;min-width:0">
+          <div class="spot-name">${s.name}</div>
+          <div class="spot-region">${s.region}</div>
+        </div>
+        <div class="spot-wind">
+          <div class="speed">${w.speedMs.toFixed(1)} m/s</div>
+          <div class="dir">${w.directionLabel} · ${(r.score*100).toFixed(0)}%</div>
+        </div>
+        <span class="spot-badge" style="background:${c}22;color:${c}">${r.conditions}</span>
+      </div>`;
+  }
+
+  function highlightRow(id) {
+    document.getElementById('row-' + activeRow)?.classList.remove('active');
+    activeRow = id;
+    document.getElementById('row-' + id)?.classList.add('active');
+  }
+  function scrollToRow(id) {
+    document.getElementById('row-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  function focusSpot(id) {
+    const r = allSpots.find(s => s.spot.id === id);
+    if (!r) return;
+    highlightRow(id);
+    map.setView([r.spot.latitude, r.spot.longitude], Math.max(map.getZoom(), 9), { animate: true });
+    markers[id]?.openPopup();
+  }
+
+  function updateList() {
+    const bounds = map.getBounds();
+    const visible = allSpots
+      .filter(r => bounds.contains([r.spot.latitude, r.spot.longitude]))
+      .sort((a, b) => b.score - a.score);
+    document.getElementById('panel-header').textContent =
+      `${visible.length} spot${visible.length !== 1 ? 'ar' : ''} i synligt område — klicka för att zooma`;
+    document.getElementById('spot-list').innerHTML = visible.length
+      ? visible.map(spotRowHtml).join('')
+      : '<p style="padding:12px;color:#64748b;font-size:0.85rem">Inga spotar synliga — zooma ut.</p>';
+  }
+
+  async function loadSpots(lat, lon) {
+    setStatus('Hämtar vinddata…');
+    try {
+      const res = await fetch(`/spots/top?lat=${lat}&lon=${lon}&radius_km=700&limit=50`);
+      if (!res.ok) throw new Error(`Serverfel ${res.status}`);
+      allSpots = await res.json();
+      Object.values(markers).forEach(m => map.removeLayer(m));
+      markers = {};
+      allSpots.forEach(r => { markers[r.spot.id] = makeMarker(r); });
+      updateList();
+      setStatus(`${allSpots.length} spotar laddade`);
+    } catch (e) { setStatus(`Fel: ${e.message}`); }
+  }
+
+  function setStatus(msg) { document.getElementById('status').textContent = msg; }
+
+  function locateMe() {
+    const btn = document.getElementById('locate-btn');
+    if (!navigator.geolocation) { setStatus('Geolokalisering stöds inte.'); return; }
+    btn.disabled = true;
+    setStatus('Hämtar position…');
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const { latitude, longitude } = pos.coords;
+        map.setView([latitude, longitude], 8, { animate: true });
+        loadSpots(latitude, longitude);
+        btn.disabled = false;
+      },
+      err => { setStatus(`Positionsfel: ${err.message}`); btn.disabled = false; },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
+  // ---- Add mode ----
+  function toggleAddMode() {
+    addMode = !addMode;
+    const btn = document.getElementById('add-btn');
+    const mapEl = document.getElementById('map');
+    if (addMode) {
+      btn.classList.add('add-active');
+      btn.textContent = '✕ Avbryt';
+      mapEl.classList.add('map-add-cursor');
+      setStatus('Klicka på kartan för att lägga till ett nytt spot');
+    } else {
+      btn.classList.remove('add-active');
+      btn.textContent = '➕ Lägg till spot';
+      mapEl.classList.remove('map-add-cursor');
+      setStatus(`${allSpots.length} spotar laddade`);
+      clearAddMarker();
+    }
+  }
+
+  function clearAddMarker() {
+    if (addMarker) { map.removeLayer(addMarker); addMarker = null; }
+  }
+
+  function openAdd(lat, lon) {
+    document.getElementById('edit-id').value = '';
+    document.getElementById('edit-lat').value = lat.toFixed(5);
+    document.getElementById('edit-lon').value = lon.toFixed(5);
+    document.getElementById('edit-name').value = '';
+    document.getElementById('edit-region').value = '';
+    document.getElementById('edit-desc').value = '';
+    document.getElementById('edit-access').value = '';
+    document.getElementById('edit-type').value = 'FLAT_WATER';
+    document.getElementById('edit-diff').value = 'INTERMEDIATE';
+    document.getElementById('edit-min').value = '5';
+    document.getElementById('edit-ideal').value = '8';
+    document.getElementById('edit-max').value = '15';
+    document.querySelectorAll('.dirs-grid input[type=checkbox]').forEach(cb => cb.checked = false);
+    const modal = document.getElementById('modal');
+    modal.classList.add('modal-add');
+    document.getElementById('modal-title').textContent = 'Nytt spot';
+    document.getElementById('modal-overlay').classList.add('open');
+  }
+
+  map.on('click', e => {
+    if (!addMode) return;
+    clearAddMarker();
+    addMarker = L.marker(e.latlng, {
+      icon: L.divIcon({ className: '', html: '<div style="width:16px;height:16px;background:#f59e0b;border:2px solid #fff;border-radius:50%"></div>', iconAnchor: [8,8] })
+    }).addTo(map);
+    openAdd(e.latlng.lat, e.latlng.lng);
+  });
+
+  // ---- Edit modal ----
+  function openEdit(spotId) {
+    const r = allSpots.find(s => s.spot.id === spotId);
+    if (!r) return;
+    const s = r.spot;
+    document.getElementById('edit-id').value = spotId;
+    document.getElementById('edit-name').value = s.name || '';
+    document.getElementById('edit-region').value = s.region || '';
+    document.getElementById('edit-desc').value = s.description || '';
+    document.getElementById('edit-access').value = s.accessInfo || '';
+    document.getElementById('edit-type').value = s.type || 'FLAT_WATER';
+    document.getElementById('edit-diff').value = s.difficulty || 'INTERMEDIATE';
+    document.getElementById('edit-min').value = s.minWindSpeed || '';
+    document.getElementById('edit-ideal').value = s.idealWindSpeed || '';
+    document.getElementById('edit-max').value = s.maxWindSpeed || '';
+    document.querySelectorAll('.dirs-grid input[type=checkbox]').forEach(cb => {
+      cb.checked = (s.bestDirections || []).includes(cb.value);
+    });
+    document.getElementById('modal-overlay').classList.add('open');
+    map.closePopup();
+  }
+
+  function closeModal() {
+    document.getElementById('modal-overlay').classList.remove('open');
+    document.getElementById('modal').classList.remove('modal-add');
+    document.getElementById('modal-title').textContent = '✏️ Redigera spot';
+    clearAddMarker();
+    if (addMode) toggleAddMode();
+  }
+
+  document.getElementById('modal-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('modal-overlay')) closeModal();
+  });
+
+  async function saveSpot() {
+    const id = document.getElementById('edit-id').value;
+    const isAdd = !id;
+    const dirs = [...document.querySelectorAll('.dirs-grid input:checked')].map(cb => cb.value);
+    const name = document.getElementById('edit-name').value.trim();
+    if (!name) { alert('Namn krävs'); return; }
+
+    const body = {
+      name,
+      latitude:      isAdd ? parseFloat(document.getElementById('edit-lat').value) : undefined,
+      longitude:     isAdd ? parseFloat(document.getElementById('edit-lon').value) : undefined,
+      region:        document.getElementById('edit-region').value.trim(),
+      description:   document.getElementById('edit-desc').value.trim(),
+      accessInfo:    document.getElementById('edit-access').value.trim(),
+      type:          document.getElementById('edit-type').value,
+      difficulty:    document.getElementById('edit-diff').value,
+      minWindSpeed:  parseFloat(document.getElementById('edit-min').value) || 0,
+      idealWindSpeed:parseFloat(document.getElementById('edit-ideal').value) || 0,
+      maxWindSpeed:  parseFloat(document.getElementById('edit-max').value) || 0,
+      bestDirections: dirs.length ? dirs : undefined
+    };
+
+    try {
+      const url = isAdd ? '/spots' : `/spots/${id}`;
+      const method = isAdd ? 'POST' : 'PUT';
+      const res = await authFetch(url, { method, body: JSON.stringify(body) });
+      if (!res) return;
+      if (!res.ok) throw new Error(await res.text());
+      closeModal();
+      setStatus(`✓ ${name} ${isAdd ? 'tillagd' : 'sparad'} — laddar om…`);
+      const center = map.getCenter();
+      await loadSpots(center.lat, center.lng);
+    } catch (e) {
+      alert('Fel vid sparning: ' + e.message);
+    }
+  }
+
+  // ---- Redigerbar sidrubrik (sparas på server, syns för alla) ----
+  const titleEl = document.getElementById('site-title');
+  let serverTitle = 'Windsurf Spots';
+
+  async function loadTitle() {
+    try {
+      const res = await fetch('/settings');
+      if (res.ok) {
+        const data = await res.json();
+        serverTitle = data.title || serverTitle;
+        titleEl.textContent = serverTitle;
+        document.title = serverTitle;
+      }
+    } catch (_) {}
+  }
+
+  titleEl.addEventListener('blur', async () => {
+    const t = titleEl.textContent.trim() || serverTitle;
+    titleEl.textContent = t;
+    document.title = t;
+    if (t === serverTitle) return;
+    const key = getApiKey();
+    if (!key) { titleEl.textContent = serverTitle; document.title = serverTitle; return; }
+    try {
+      const res = await fetch('/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Api-Key': key },
+        body: JSON.stringify({ title: t })
+      });
+      if (res.ok) serverTitle = t;
+      else { titleEl.textContent = serverTitle; document.title = serverTitle; }
+    } catch (_) { titleEl.textContent = serverTitle; document.title = serverTitle; }
+  });
+
+  titleEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); titleEl.blur(); }
+    if (e.key === 'Escape') { titleEl.textContent = serverTitle; document.title = serverTitle; titleEl.blur(); }
+  });
+
+  loadTitle();
+
+  // ---- Användarnamn (cachas tills vidare i localStorage) ----
+  const USER_STORE = 'windsurf-username';
+
+  function getUsername() {
+    const stored = localStorage.getItem(USER_STORE);
+    if (stored) return stored;
+    const name = prompt('Vad heter du? (visas i ändringsloggen)');
+    if (!name || !name.trim()) return null;
+    localStorage.setItem(USER_STORE, name.trim());
+    return name.trim();
+  }
+
+  // ---- API-nyckel (cachas 7 dagar i localStorage) ----
+  const KEY_STORE = 'windsurf-api-key';
+  const WEEK_MS   = 7 * 24 * 60 * 60 * 1000;
+
+  function getApiKey() {
+    const raw = localStorage.getItem(KEY_STORE);
+    if (raw) {
+      try {
+        const { key, expires } = JSON.parse(raw);
+        if (Date.now() < expires) return key;
+      } catch (_) {}
+      localStorage.removeItem(KEY_STORE);
+    }
+    const key = prompt('Ange bomkod för att redigera spotar:');
+    if (!key) return null;
+    localStorage.setItem(KEY_STORE, JSON.stringify({ key, expires: Date.now() + WEEK_MS }));
+    return key;
+  }
+
+  function clearApiKey() {
+    localStorage.removeItem(KEY_STORE);
+  }
+
+  async function authFetch(url, options) {
+    const key = getApiKey();
+    if (!key) return null;
+    const user = getUsername();
+    if (!user) return null;
+    const res = await fetch(url, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': key, 'X-User-Name': user, ...(options.headers || {}) }
+    });
+    if (res.status === 401) {
+      clearApiKey();
+      alert('Fel bomkod — försök igen.');
+      return null;
+    }
+    return res;
+  }
+
+  // ---- History modal ----
+  let historySpotId = null;
+
+  async function openHistory(spotId, spotName) {
+    historySpotId = spotId;
+    document.getElementById('history-spot-name').textContent = spotName;
+    document.getElementById('history-list').innerHTML = '<p style="padding:12px;color:#64748b;font-size:0.85rem">Laddar historik…</p>';
+    document.getElementById('history-overlay').classList.add('open');
+    map.closePopup();
+    try {
+      const res = await fetch(`/spots/${spotId}/history`);
+      const logs = await res.json();
+      if (!logs.length) {
+        document.getElementById('history-list').innerHTML = '<p style="padding:12px;color:#64748b;font-size:0.85rem">Ingen historik ännu.</p>';
+        return;
+      }
+      const total = logs.length;
+      const idToVersion = {};
+      logs.forEach((log, idx) => { idToVersion[log.id] = total - idx; });
+
+      document.getElementById('history-list').innerHTML = logs.map((log, idx) => {
+        const version = total - idx;
+        const snap = JSON.parse(log.changeJson || '{}');
+        const desc = snap.description ? snap.description.substring(0, 120) + (snap.description.length > 120 ? '…' : '') : '(ingen beskrivning)';
+        const dt = log.changedAt ? log.changedAt.substring(0,16).replace('T',' ') : '';
+        const isLatest = idx === 0;
+
+        let sourceNote = '';
+        if (log.action === 'RESTORED' && log.restoredFromLogId != null) {
+          const srcVer = idToVersion[log.restoredFromLogId];
+          sourceNote = `<div style="font-size:0.7rem;color:#f59e0b;margin-bottom:4px">↩ från v${srcVer != null ? srcVer : '?'}</div>`;
+        }
+
+        const restoreBtn = isLatest
+          ? `<div style="margin-top:8px;font-size:0.72rem;color:#475569;font-style:italic">Nuvarande version</div>`
+          : `<button class="hist-restore" onclick="restoreVersion(${log.id})">↩ Återställ till denna version</button>`;
+
+        return `
+          <div class="hist-entry">
+            <div class="hist-meta">
+              <span class="hist-who">v${version} · ${log.changedBy || 'Okänd'}</span>
+              <span class="hist-action ${log.action}">${log.action}</span>
+            </div>
+            <div class="hist-date">${dt}</div>
+            ${sourceNote}
+            <div class="hist-desc">${desc}</div>
+            ${restoreBtn}
+          </div>`;
+      }).join('');
+    } catch (e) {
+      document.getElementById('history-list').innerHTML = `<p style="padding:12px;color:#ef4444">Fel: ${e.message}</p>`;
+    }
+  }
+
+  function closeHistory() {
+    document.getElementById('history-overlay').classList.remove('open');
+    historySpotId = null;
+  }
+
+  async function restoreVersion(logId) {
+    if (!confirm('Återställ spoten till denna version?')) return;
+    const res = await authFetch(`/spots/${historySpotId}/restore/${logId}`, { method: 'POST' });
+    if (!res) return;
+    if (!res.ok) { alert('Fel vid återställning: ' + await res.text()); return; }
+    closeHistory();
+    setStatus('↩ Återställd — laddar om…');
+    const center = map.getCenter();
+    await loadSpots(center.lat, center.lng);
+  }
+
+  document.getElementById('history-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('history-overlay')) closeHistory();
+  });
+
+  map.on('moveend', updateList);
+  loadSpots(58.0, 16.5);
+</script>
+</body>
+</html>
