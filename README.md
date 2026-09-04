@@ -8,9 +8,11 @@ En backend-tjänst byggd i **Quarkus (Java)** som hjälper vindsurfare att hitta
 
 - Hämtar aktuell vind per GPS-koordinat från Open-Meteo
 - Beräknar ett poäng (0–1) för varje spot baserat på vindriktning, vindstyrka och byighet
-- Returnerar sorterad lista med spots, vinddata och konditionsomdöme (Utmärkt / Bra / Godkänt / Dåligt)
-- Renderar en interaktiv Leaflet-karta i webbläsaren med färgkodade markörer
-- Låter användare lägga till egna spotar och redigera befintliga
+- Returnerar sorterad lista med spots, vinddata och konditionsomdöme (**Utmärkt / Bra / Godkänt / Dåligt / Ingen vind**)
+- Renderar en interaktiv Leaflet-karta med färgkodade markörer och GPS-positionering
+- Låter användare lägga till spotar genom att klicka på kartan, redigera befintliga och se ändringshistorik
+- Skyddar skrivoperationer med en delad bomkod
+- Loggar alla ändringar med användarnamn, tidsstämpel och möjlighet att återställa
 
 ---
 
@@ -30,16 +32,59 @@ Swagger UI (API-dokumentation) finns på `http://localhost:8080/q/swagger-ui`.
 
 | Metod | Sökväg | Beskrivning |
 |---|---|---|
-| `GET` | `/spots/top` | Hämta rankat lista med spots för ett område |
-| `POST` | `/spots` | Lägg till ett nytt spot (användarbidrag) |
-| `PUT` | `/spots/{id}` | Uppdatera data på ett befintligt spot |
-| `POST` | `/spots/import/osm` | Importera spots från OpenStreetMap (Overpass) |
+| `GET` | `/spots/top` | Hämta rankad lista med spots för ett område |
+| `POST` | `/spots` | Lägg till ett nytt spot (kräver bomkod) |
+| `PUT` | `/spots/{id}` | Uppdatera data på ett befintligt spot (kräver bomkod) |
+| `GET` | `/spots/{id}/history` | Ändringshistorik för ett specifikt spot |
+| `POST` | `/spots/{id}/restore/{logId}` | Återställ spot till tidigare version (kräver bomkod) |
+| `POST` | `/spots/import/osm` | Importera spots från OpenStreetMap (kräver bomkod) |
+| `GET` | `/settings` | Hämta appinställningar (sidrubrik) |
+| `PUT` | `/settings` | Uppdatera appinställningar (kräver bomkod) |
 
 ### Exempel — hämta spots nära Varberg
 
 ```
-GET /spots/top?lat=57.1&lon=12.3&radius_km=200&limit=20
+GET http://localhost:8080/spots/top?lat=57.1&lon=12.3&radius_km=200&limit=20
 ```
+
+---
+
+## Autentisering
+
+Alla skrivoperationer (POST, PUT) kräver headern `X-Api-Key` med rätt bomkod:
+
+```bash
+curl -X PUT http://localhost:8080/spots/sandhamn \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: <bomkod>" \
+  -d '{"description": "Uppdaterad beskrivning"}'
+```
+
+Bomkoden konfigureras i `application.properties`:
+
+```properties
+windsurf.api-key=<din-bomkod>
+```
+
+I webbgränssnittet cachas bomkoden i webbläsarens localStorage i **7 dagar** — man behöver bara ange den en gång per vecka.
+
+---
+
+## Ändringslogg
+
+Varje POST och PUT loggas automatiskt i tabellen `change_log` med:
+
+| Fält | Innehåll |
+|---|---|
+| `spotExternalId` | Spotens ID |
+| `spotName` | Spotens namn vid ändringstillfället |
+| `action` | `CREATED`, `UPDATED` eller `RESTORED` |
+| `changedBy` | Användarnamnet (anges i webbgränssnittet) |
+| `changedAt` | Tidsstämpel |
+| `changeJson` | Snapshot av hela spotens tillstånd (JSON) |
+| `restoredFromLogId` | Vid `RESTORED`: vilket logg-id som återställdes från |
+
+Via **📋 Historik**-knappen i varje spot-popup kan man se alla versioner och återställa till en tidigare version. Senaste versionen kan inte återställas (den är redan nuläget).
 
 ---
 
@@ -49,11 +94,11 @@ Det finns tre typer av spotar i databasen, markerade med `source`-fältet:
 
 | Källa | Beskrivning |
 |---|---|
-| `SEED` | Hårdkodade favoritspot (vår lista), läggs in automatiskt vid uppstart |
+| `SEED` | Handkurerade favoritspot, läggs in automatiskt vid uppstart om de saknas |
 | `OSM` | Importerade från OpenStreetMap via Overpass API |
-| `USER` | Tillagda av användare via POST /spots |
+| `USER` | Tillagda av användare via kartan eller API |
 
-SEED-spottarna innehåller handkurerade data (idealvind, riktningar, beskrivning) och utgör en bas som alltid finns med oavsett vad OSM-datan innehåller. Om ett SEED-spot redan finns i databasen (matchas på `externalId`) läggs det inte in igen — data kan alltså redigeras utan att skrivas över vid omstart.
+SEED-spottarna matchas på `externalId` vid uppstart — de skrivs inte över om de redan finns, vilket innebär att redigerade seed-spotar bevaras vid omstart.
 
 ---
 
@@ -68,8 +113,8 @@ poäng = riktningspoäng × 0.4
 ```
 
 - **Riktningspoäng** — 1.0 om vinden matchar spotens bästa riktningar, annars 0.3
-- **Fartpoäng** — minskar ju mer aktuell vindstyrka avviker från spotens idealvind (max avvikelse 8 m/s = noll poäng)
-- **Bypoäng** — minskar om byar är kraftiga relativt medelvinden (hög bykvot = opålitlig vind)
+- **Fartpoäng** — skalas mot spotens eget intervall: 0.0 vid min/max-vind, 1.0 vid idealvind (linjär ramp)
+- **Bypoäng** — beräknas från gust/medelvind-kvoten; används neutralt (0.6) om bydata saknas
 
 Om vinden är utanför spotens min/max-intervall sätts poänget direkt till 0 ("Ingen vind / utanför intervall").
 
@@ -91,6 +136,8 @@ Om vinden är utanför spotens min/max-intervall sätts poänget direkt till 0 (
 | `accessInfo` | String | Tillgänglighet, parkering, hinder |
 | `source` | enum | `SEED`, `OSM`, `USER` |
 | `approved` | boolean | Visas bara om true |
+| `createdBy` / `updatedBy` | String | Användarnamn för skapare / senaste ändring |
+| `createdAt` / `updatedAt` | LocalDateTime | Tidsstämplar |
 
 ---
 
@@ -102,11 +149,11 @@ Om vinden är utanför spotens min/max-intervall sätts poänget direkt till 0 (
 - **Kostnad**: Gratis, ingen API-nyckel krävs
 - **Gräns**: 10 000 anrop/dag, 300 000/månad
 - **Vad vi hämtar**: Aktuell vindstyrka (km/h, konverteras till m/s) och vindriktning (grader)
-- **Caching**: Vinddata cachas i 30 minuter per koordinat i minnet för att hålla anropen låga
+- **Caching**: Vinddata cachas i 30 minuter per koordinat i minnet
 
-**Varför Open-Meteo?** Gratis utan registrering, pålitlig, 1 km upplösning globalt och returnerar data direkt utan OAuth-flöde. Perfekt för ett MVP.
+**Varför Open-Meteo?** Gratis utan registrering, pålitlig, 1 km upplösning globalt och returnerar data direkt utan OAuth-flöde.
 
-**Begränsning**: `current_weather=true`-parametern (legacy API) returnerar inte byvindar. Bydata är därmed alltid 0 i nuläget — bypoänget i algoritmen används inte fullt ut.
+**Begränsning**: `current_weather=true`-parametern (legacy API) returnerar inte byvindar. Bydata är 0 i nuläget — bypoänget används med neutralt fallback (0.6).
 
 ---
 
@@ -117,25 +164,25 @@ Om vinden är utanför spotens min/max-intervall sätts poänget direkt till 0 (
 - **Vad vi gör**: Frågar efter noder med `sport=windsurfing`, `sport=kitesurfing` eller `sport=kiteboarding` inom bbox södra Sverige (lat 55–61.5, lon 10.5–25)
 - **Importeras manuellt** via `POST /spots/import/osm` — startas inte automatiskt för att undvika långsam uppstart
 
-**Begränsning**: Täckningen i OSM är ojämn. Välkända spots som Appelviken och Träslövsläge saknar `sport`-taggar i OSM och importeras därför inte — dessa finns istället som SEED-data.
+**Begränsning**: Täckningen i OSM är ojämn. Välkända spots som Appelviken och Träslövsläge saknar `sport`-taggar och finns istället som SEED-data.
 
 ---
 
 ## Valda bort — alternativa tjänster
 
 ### Windy API
-- **Varför inte**: Gratis-nivån ger bara GFS-modellen (lägre noggrannhet). ECMWF-modellen (mer precis för vindprognos) är betald. Windy är bättre för UI-lager (iframe-baserad kartvisualisering) än för rå API-data.
-- **Intressant framöver**: Windy inkluderar vågdata och svall — relevant för WAVES-spotar.
+- **Varför inte**: Gratis-nivån ger bara GFS-modellen (lägre noggrannhet). ECMWF-modellen är betald. Windy är bättre för UI-visualisering (iframe) än för rå API-data.
+- **Intressant framöver**: Inkluderar vågdata och svall — relevant för WAVES-spotar.
 
 ### Stormglass.io
-- **Varför inte**: Gratis-nivån tillåter bara 10 anrop per dag, vilket är otillräckligt när tjänsten hämtar vind per spot vid varje request. Betald plan börjar på ~$29/månad.
-- **Intressant framöver**: Stormglass har bäst marin data — vågperiod, svallriktning, vattentemperatur. Värt att integrera för WAVES-spots om man cacchar aggressivt.
+- **Varför inte**: Gratis-nivån tillåter bara 10 anrop per dag. Betald plan ~$29/månad.
+- **Intressant framöver**: Bäst marin data — vågperiod, svallriktning, vattentemperatur. Värt att integrera för WAVES-spots med aggressiv caching.
 
 ### OpenWeatherMap
-- **Varför inte**: Kräver API-nyckel och registrering. Ger inte byvind på gratis-nivå. Inget svall- eller vågdata. Open-Meteo är överlägset för det vi behöver just nu.
+- **Varför inte**: Kräver API-nyckel. Ingen byvind på gratis-nivå. Inget svall- eller vågdata.
 
 ### NOAA / NWS
-- **Varför inte**: Täcker primärt USA. Datan är tillgänglig globalt via NDFD men API:et är komplext (GeoJSON-tungt) och inte optimerat för punktfrågor i Sverige.
+- **Varför inte**: Täcker primärt USA. API:et är komplext (GeoJSON-tungt) och inte optimerat för punktfrågor i Sverige.
 
 ---
 
@@ -145,24 +192,30 @@ Om vinden är utanför spotens min/max-intervall sätts poänget direkt till 0 (
 
 Valt framför Spring Boot av tre skäl:
 
-1. **Lågt minnesfotavtryck**: Quarkus JVM-läge använder ~150–200 MB RAM mot Spring Boots ~350–500 MB. Direktöversatt till lägre molnkostnad.
-2. **Snabbt att komma igång**: Hibernate ORM Panache och RESTEasy Reactive ger lite kodbrus jämfört med Spring Data JPA.
-3. **GraalVM native** (framtida option): Quarkus kan kompileras till en native binary (~50 MB RAM, startar på <100 ms) om molnkostnaden behöver pressas ytterligare.
+1. **Lågt minnesfotavtryck**: Quarkus JVM-läge använder ~150–200 MB RAM mot Spring Boots ~350–500 MB.
+2. **Panache ORM**: Hibernate ORM Panache ger lite kodbrus jämfört med Spring Data JPA.
+3. **GraalVM native** (framtida option): Kan kompileras till en native binary (~50 MB RAM, <100 ms starttid).
 
 ### H2 (filbaserad databas) — används nu
 
-Enklast möjliga setup — ingen separat databasprocess, filen `windsurf-db.*` skapas i projektkatalogen. Överlever omstarter och fungerar för ett MVP eller lokalt bruk.
+Ingen separat databasprocess. Filen `windsurf-db.mv.db` skapas i projektkatalogen och överlever omstarter.
 
-**Framöver**: Bör bytas till PostgreSQL inför deploy i molnet. Quarkus stöder enkelt switch via `application.properties` (`quarkus.datasource.db-kind=postgresql`).
+**Framöver**: Bör bytas till PostgreSQL inför deploy i molnet. Switch görs via `application.properties`:
+
+```properties
+%prod.quarkus.datasource.db-kind=postgresql
+%prod.quarkus.datasource.jdbc.url=${DATABASE_URL}
+```
 
 ---
 
 ## Planerade utbyggnader
 
-- **Fotouppladdning per spot** — användare ska kunna lägga till bilder för att visa förhållandena vid spoten
-- **Spot-recensioner / betyg** — möjlighet att lämna kommentarer och stjärnbetyg per spot
-- **Prognos** — visa vindutveckling per timme kommande 6–12 timmar per spot (Open-Meteo stöder detta via `hourly`-parametern)
-- **Byvindar** — byta till Open-Meteo `current=wind_gusts_10m` (eller komplettera med Stormglass) för att aktivera bypoänget i scoringalgoritmen
-- **Användarautentisering** — JWT-baserad inloggning för att koppla bidrag till konton och skydda redigeringsendpointen
+- **Fotouppladdning per spot** — bilder som visar förhållandena vid spoten
+- **Spot-recensioner / betyg** — kommentarer och stjärnbetyg per spot
+- **Prognos** — vindutveckling per timme kommande 6–12 timmar (Open-Meteo `hourly`-parametern)
+- **Byvindar** — integrera bydata från Open-Meteo eller Stormglass för att aktivera bypoänget fullt ut
+- **Användarkonton** — Google OAuth för att koppla bidrag och historik till specifika personer
 - **Push-notiser / larm** — "meddela mig när vinden på Appelviken överstiger 8 m/s från SW"
-- **PostgreSQL i moln** — byta från H2 till managed PostgreSQL (Railway eller Fly.io) inför produktionssättning
+- **Admin-sida** — vy för ändringsloggen med filtrering per spot och användare
+- **PostgreSQL i moln** — Railway eller Fly.io inför produktionssättning
