@@ -280,6 +280,7 @@
       <div class="popup-region">${s.region}</div>
       <div class="popup-wind">
         <div class="popup-stat"><div class="val">${w.speedMs.toFixed(1)}</div><div class="lbl">m/s</div></div>
+        ${w.gustsMs > 0 ? `<div class="popup-stat"><div class="val" style="color:#fbbf24">${w.gustsMs.toFixed(1)}</div><div class="lbl">byvind</div></div>` : ''}
         <div class="popup-stat"><div class="val">${w.directionLabel}</div><div class="lbl">riktning</div></div>
         <div class="popup-stat"><div class="val" style="color:${color(r.conditions)}">${r.conditions}</div><div class="lbl">kondition</div></div>
       </div>

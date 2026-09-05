@@ -13,6 +13,6 @@ public interface OpenMeteoClient {
     OpenMeteoResponse getCurrent(
         @QueryParam("latitude") double latitude,
         @QueryParam("longitude") double longitude,
-        @QueryParam("current_weather") boolean currentWeather
+        @QueryParam("current") String current
     );
 }

@@ -1,11 +1,15 @@
 package com.windsurf.client;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-public record OpenMeteoResponse(@JsonProperty("current_weather") CurrentWeather currentWeather) {
+@JsonIgnoreProperties(ignoreUnknown = true)
+public record OpenMeteoResponse(Current current) {
 
-    public record CurrentWeather(
-        double windspeed,      // km/h
-        double winddirection   // degrees 0-360
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Current(
+        @JsonProperty("wind_speed_10m")    double windSpeed,
+        @JsonProperty("wind_direction_10m") double windDirection,
+        @JsonProperty("wind_gusts_10m")    double windGusts
     ) {}
 }

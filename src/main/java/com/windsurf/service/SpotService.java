@@ -52,10 +52,14 @@ public class SpotService {
         CachedWind cached = windCache.get(key);
         if (cached != null && !cached.isExpired()) return cached.data();
 
-        OpenMeteoResponse response = openMeteoClient.getCurrent(spot.latitude(), spot.longitude(), true);
-        double dir = response.currentWeather().winddirection();
-        double speedMs = response.currentWeather().windspeed() * KMH_TO_MS;
-        WindData wind = new WindData(speedMs, dir, 0.0, scoringService.directionLabel(dir));
+        OpenMeteoResponse response = openMeteoClient.getCurrent(
+            spot.latitude(), spot.longitude(),
+            "wind_speed_10m,wind_direction_10m,wind_gusts_10m"
+        );
+        double dir     = response.current().windDirection();
+        double speedMs = response.current().windSpeed() * KMH_TO_MS;
+        double gustMs  = response.current().windGusts() * KMH_TO_MS;
+        WindData wind = new WindData(speedMs, dir, gustMs, scoringService.directionLabel(dir));
         windCache.put(key, new CachedWind(wind, Instant.now()));
         return wind;
     }
