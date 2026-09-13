@@ -2,6 +2,13 @@
 
 En backend-tjänst byggd i **Quarkus (Java)** som hjälper vindsurfare att hitta de bästa spoterna baserat på aktuella vindförhållanden. Kartan visar spotar i södra Sverige och rankar dem i realtid mot varje spots idealvind.
 
+## Deployment i Google Cloud
+
+Tjänsten använder nu MongoDB. `cloudbuild.yaml` bygger med Google Buildpacks och
+deployar till Cloud Run utan Dockerfile, enligt samma upplägg som booking-service.
+Följ [deployguiden](CLOUD_RUN.md) för GitLab-triggern och Cloud Run-inställningarna.
+Äldre H2-/PostgreSQL-beskrivningar längre ned avser den tidigare databaslösningen.
+
 ---
 
 ## Vad tjänsten gör

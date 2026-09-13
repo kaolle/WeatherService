@@ -6,7 +6,6 @@ import com.windsurf.model.*;
 import com.windsurf.service.OverpassImportService;
 import com.windsurf.service.SpotService;
 import jakarta.inject.Inject;
-import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -15,6 +14,7 @@ import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +23,7 @@ import java.util.UUID;
 @Path("/spots")
 @Produces(MediaType.APPLICATION_JSON)
 @Tag(name = "Spots", description = "Windsurf spot discovery and wind conditions")
+@SuppressWarnings("unused")
 public class SpotResource {
 
     @Inject
@@ -55,7 +56,6 @@ public class SpotResource {
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
-    @Transactional
     @Operation(summary = "Add a user-contributed windsurf spot")
     public Response addSpot(UserSpotRequest req, @HeaderParam("X-User-Name") String userName) {
         if (req.name() == null || req.name().isBlank()) {
@@ -75,12 +75,12 @@ public class SpotResource {
         entity.minWindSpeed   = req.minWindSpeed()   > 0 ? req.minWindSpeed()   : 5.0;
         entity.maxWindSpeed   = req.maxWindSpeed()   > 0 ? req.maxWindSpeed()   : 15.0;
         entity.bestDirections = (req.bestDirections() != null && !req.bestDirections().isEmpty())
-            ? String.join(",", req.bestDirections())
-            : "W,SW,S,SE,E,NE,N,NW";
+            ? req.bestDirections()
+            : List.of("W", "SW", "S", "SE", "E", "NE", "N", "NW");
         entity.source = SpotSource.USER;
         entity.approved = true;
         entity.createdBy = userName;
-        entity.createdAt = LocalDateTime.now();
+        entity.createdAt = LocalDateTime.now().toString();
         entity.persist();
         logChange(entity.externalId, entity.name, "CREATED", userName, entity);
         return Response.status(201).entity(Map.of("id", entity.externalId, "name", entity.name)).build();
@@ -89,7 +89,6 @@ public class SpotResource {
     @PUT
     @Path("/{id}")
     @Consumes(MediaType.APPLICATION_JSON)
-    @Transactional
     @Operation(summary = "Update an existing windsurf spot")
     public Response updateSpot(@PathParam("id") String id, UpdateSpotRequest req,
                                @HeaderParam("X-User-Name") String userName) {
@@ -107,10 +106,11 @@ public class SpotResource {
         if (req.minWindSpeed() > 0)                             entity.minWindSpeed = req.minWindSpeed();
         if (req.maxWindSpeed() > 0)                             entity.maxWindSpeed = req.maxWindSpeed();
         if (req.bestDirections() != null && !req.bestDirections().isEmpty()) {
-            entity.bestDirections = String.join(",", req.bestDirections());
+            entity.bestDirections = req.bestDirections();
         }
         entity.updatedBy = userName;
-        entity.updatedAt = LocalDateTime.now();
+        entity.updatedAt = LocalDateTime.now().toString();
+        entity.update();
         logChange(entity.externalId, entity.name, "UPDATED", userName, entity);
         return Response.ok(Map.of("id", entity.externalId, "name", entity.name)).build();
     }
@@ -119,14 +119,15 @@ public class SpotResource {
         logChange(spotId, spotName, action, changedBy, entity, null);
     }
 
-    private void logChange(String spotId, String spotName, String action, String changedBy, SpotEntity entity, Long restoredFromLogId) {
+    private void logChange(String spotId, String spotName, String action, String changedBy, SpotEntity entity, String restoredFromLogId) {
         ChangeLogEntity log = new ChangeLogEntity();
+        log.id = UUID.randomUUID().toString();
         log.restoredFromLogId = restoredFromLogId;
         log.spotExternalId = spotId;
         log.spotName = spotName;
         log.action = action;
         log.changedBy = changedBy;
-        log.changedAt = LocalDateTime.now();
+        log.changedAt = LocalDateTime.now().toString();
         try {
             Map<String, Object> snapshot = new LinkedHashMap<>();
             snapshot.put("name", entity.name);
@@ -159,9 +160,8 @@ public class SpotResource {
 
     @POST
     @Path("/{id}/restore/{logId}")
-    @Transactional
     @Operation(summary = "Restore a spot to a previous version from change log")
-    public Response restoreSpot(@PathParam("id") String id, @PathParam("logId") Long logId,
+    public Response restoreSpot(@PathParam("id") String id, @PathParam("logId") String logId,
                                 @HeaderParam("X-User-Name") String userName) {
         SpotEntity entity = SpotEntity.find("externalId", id).firstResult();
         if (entity == null) return Response.status(404).entity(Map.of("error", "Spot ej hittad")).build();
@@ -170,7 +170,7 @@ public class SpotResource {
         if (log == null || !id.equals(log.spotExternalId))
             return Response.status(404).entity(Map.of("error", "Loggpost ej hittad")).build();
 
-        @SuppressWarnings("unchecked")
+
         Map<String, Object> snap;
         try {
             snap = objectMapper.readValue(log.changeJson, Map.class);
@@ -186,8 +186,14 @@ public class SpotResource {
             entity.description = snap.get("description") != null ? snap.get("description").toString() : null;
         if (snap.containsKey("accessInfo"))
             entity.accessInfo = snap.get("accessInfo") != null ? snap.get("accessInfo").toString() : null;
-        if (snap.containsKey("bestDirections") && snap.get("bestDirections") != null)
-            entity.bestDirections = snap.get("bestDirections").toString();
+        if (snap.containsKey("bestDirections") && snap.get("bestDirections") != null) {
+            Object bd = snap.get("bestDirections");
+            if (bd instanceof List) {
+                entity.bestDirections = (List<String>) bd;
+            } else {
+                entity.bestDirections = Arrays.asList(bd.toString().split(","));
+            }
+        }
         if (snap.containsKey("type") && snap.get("type") != null)
             entity.type = SpotType.valueOf(snap.get("type").toString());
         if (snap.containsKey("difficulty") && snap.get("difficulty") != null)
@@ -206,7 +212,8 @@ public class SpotResource {
         }
 
         entity.updatedBy = userName;
-        entity.updatedAt = LocalDateTime.now();
+        entity.updatedAt = LocalDateTime.now().toString();
+        entity.update();
         logChange(entity.externalId, entity.name, "RESTORED", userName, entity, logId);
         return Response.ok(Map.of("id", entity.externalId, "restoredFrom", logId)).build();
     }

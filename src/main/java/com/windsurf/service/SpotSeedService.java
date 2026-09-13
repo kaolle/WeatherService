@@ -4,7 +4,6 @@ import com.windsurf.model.*;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
-import jakarta.transaction.Transactional;
 
 import java.util.List;
 
@@ -15,7 +14,6 @@ public class SpotSeedService {
         seedIfEmpty();
     }
 
-    @Transactional
     void seedIfEmpty() {
         for (SpotEntity e : SEED_SPOTS) {
             if (SpotEntity.find("externalId", e.externalId).count() == 0) {
@@ -104,7 +102,7 @@ public class SpotSeedService {
         e.idealWindSpeed = ideal;
         e.minWindSpeed = min;
         e.maxWindSpeed = max;
-        e.bestDirections = dirs;
+        e.bestDirections = List.of(dirs.split(","));
         e.description = description;
         e.accessInfo = accessInfo;
         e.source = SpotSource.SEED;

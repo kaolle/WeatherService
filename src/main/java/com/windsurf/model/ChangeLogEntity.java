@@ -1,21 +1,17 @@
 package com.windsurf.model;
 
-import io.quarkus.hibernate.orm.panache.PanacheEntity;
-import jakarta.persistence.*;
-import java.time.LocalDateTime;
+import io.quarkus.mongodb.panache.PanacheMongoEntityBase;
+import io.quarkus.mongodb.panache.common.MongoEntity;
 
-@Entity
-@Table(name = "change_log")
-public class ChangeLogEntity extends PanacheEntity {
+@MongoEntity(collection = "change_log")
+public class ChangeLogEntity extends PanacheMongoEntityBase {
 
+    public String id;
     public String spotExternalId;
     public String spotName;
-    public String action; // CREATED | UPDATED
+    public String action;
     public String changedBy;
-    public LocalDateTime changedAt;
-
-    @Column(length = 4000)
+    public String changedAt;
     public String changeJson;
-
-    public Long restoredFromLogId; // set when action=RESTORED
+    public String restoredFromLogId;
 }

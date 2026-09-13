@@ -4,13 +4,13 @@ import com.windsurf.client.OverpassClient;
 import com.windsurf.client.OverpassResponse;
 import com.windsurf.model.*;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
+
+import java.util.List;
 
 @ApplicationScoped
 public class OverpassImportService {
 
-    // Southern Sweden bounding box: lat 55–61.5, lon 10.5–25
     private static final String QUERY = """
         [out:json][timeout:90];
         (
@@ -25,7 +25,6 @@ public class OverpassImportService {
     @RestClient
     OverpassClient overpassClient;
 
-    @Transactional
     public ImportResult importFromOSM() {
         OverpassResponse response = overpassClient.query(QUERY);
         int imported = 0;
@@ -57,7 +56,7 @@ public class OverpassImportService {
             entity.idealWindSpeed = 8.0;
             entity.minWindSpeed = 5.0;
             entity.maxWindSpeed = 15.0;
-            entity.bestDirections = "W,SW,S,SE,E,NE,N,NW";
+            entity.bestDirections = List.of("W", "SW", "S", "SE", "E", "NE", "N", "NW");
             entity.source = SpotSource.OSM;
             entity.approved = true;
             entity.persist();

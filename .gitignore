@@ -43,3 +43,8 @@ out/
 windsurf-db.mv.db
 windsurf-db.trace.db
 windsurf-db.lock.db
+
+### Local secrets ###
+.env
+.env.*
+!.env.example

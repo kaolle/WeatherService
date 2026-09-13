@@ -1,19 +1,16 @@
 package com.windsurf.model;
 
-import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
-import jakarta.persistence.*;
+import io.quarkus.mongodb.panache.PanacheMongoEntityBase;
+import io.quarkus.mongodb.panache.common.MongoEntity;
 
-@Entity
-@Table(name = "app_settings")
-public class AppSettings extends PanacheEntityBase {
+@MongoEntity(collection = "app_settings")
+public class AppSettings extends PanacheMongoEntityBase {
 
-    @Id
-    public Long id = 1L;
-
+    public String id = "singleton";
     public String title = "Windsurf Spots";
 
     public static AppSettings get() {
-        AppSettings s = findById(1L);
+        AppSettings s = findById("singleton");
         if (s == null) {
             s = new AppSettings();
             s.persist();

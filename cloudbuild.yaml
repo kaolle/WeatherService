@@ -1,0 +1,40 @@
+# GitLab trigger: build with Google Buildpacks, then update the Cloud Run service.
+steps:
+  - id: Build and push image
+    name: gcr.io/k8s-skaffold/pack
+    args:
+      - build
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID
+      - --builder=gcr.io/buildpacks/builder:google-24
+      - --path=.
+      - --publish
+      - --env=GOOGLE_RUNTIME_VERSION=17
+      - --env=GOOGLE_GRADLE_BUILD_ARGS=clean build --no-daemon
+      # Quarkus fast-jar lives outside Gradle's usual build/libs directory.
+      - --env=GOOGLE_BUILDABLE=build/quarkus-app
+      - --env=GOOGLE_ENTRYPOINT=java -XX:MaxRAMPercentage=70.0 -XX:+ExitOnOutOfMemoryError -jar build/quarkus-app/quarkus-run.jar
+
+  - id: Deploy to Cloud Run
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID
+      - --project
+      - $PROJECT_ID
+      - --region
+      - ${_REGION}
+      - --platform
+      - managed
+      - --quiet
+
+substitutions:
+  _REGION: europe-west1
+  _REPOSITORY: cloud-run-source-deploy
+  _SERVICE: vara-spots-service
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1200s

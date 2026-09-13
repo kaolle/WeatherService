@@ -1,7 +1,6 @@
 package com.windsurf.resource;
 
 import com.windsurf.model.AppSettings;
-import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -21,7 +20,6 @@ public class SettingsResource {
 
     @PUT
     @Consumes(MediaType.APPLICATION_JSON)
-    @Transactional
     public Response update(Map<String, String> body) {
         String title = body.get("title");
         if (title == null || title.isBlank()) {
@@ -29,6 +27,7 @@ public class SettingsResource {
         }
         AppSettings s = AppSettings.get();
         s.title = title.strip();
+        s.update();
         return Response.ok(Map.of("title", s.title)).build();
     }
 }

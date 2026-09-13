@@ -5,7 +5,6 @@ import com.windsurf.client.OpenMeteoResponse;
 import com.windsurf.model.*;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.time.Instant;
@@ -30,7 +29,6 @@ public class SpotService {
 
     private final Map<String, CachedWind> windCache = new ConcurrentHashMap<>();
 
-    @Transactional
     public List<SpotRanking> getTopSpots(double lat, double lon, double radiusKm, int limit) {
         return SpotEntity.<SpotEntity>listAll().stream()
             .filter(e -> e.approved)
