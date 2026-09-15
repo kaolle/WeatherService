@@ -14,5 +14,6 @@ public record UserSpotRequest(
     double minWindSpeed,
     double idealWindSpeed,
     double maxWindSpeed,
-    List<String> bestDirections
+    List<String> bestDirections,
+    String osmId
 ) {}

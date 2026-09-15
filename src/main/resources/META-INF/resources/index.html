@@ -2,14 +2,14 @@
 <html lang="sv">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Windsurf Spots</title>
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0a1628; color: #e0f0ff; }
-    #app { display: flex; flex-direction: column; height: 100vh; }
+    #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
 
     #topbar { background: #0f2640; padding: 10px 14px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #1e3a5f; flex-shrink: 0; }
     #topbar h1 { font-size: 1rem; color: #7dd3fc; white-space: nowrap; }
@@ -100,6 +100,61 @@
     .wind-range { display: flex; gap: 8px; align-items: center; }
     .wind-range input { flex: 1; }
     .wind-range span { color: #64748b; font-size: 0.8rem; }
+
+    /* Small screens first: keep the map visible and controls within thumb reach. */
+    [hidden] { display: none !important; }
+    #topbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 6px 10px; }
+    #topbar h1 { grid-column: 1 / -1; min-width: 0; display: flex; align-items: center; font-size: 1rem; }
+    #topbar h1 svg { width: 22px; height: 22px; flex-shrink: 0; }
+    #site-title { overflow: hidden; text-overflow: ellipsis; }
+    .tb-btn { min-height: 44px; padding: 6px; font-size: 0.78rem; touch-action: manipulation; }
+    #list-btn { background: #1e3a5f; color: #e0f0ff; }
+    #list-btn[aria-expanded="true"] { background: #0369a1; }
+    #status { grid-column: 1 / -1; color: #94a3b8; font-size: 0.72rem; white-space: normal; overflow-wrap: anywhere; }
+    #location-status, #discovery-status { flex-shrink: 0; padding: 8px 12px; font-size: 0.8rem; line-height: 1.4; color: #bae6fd; background: #12304b; }
+    #location-status[data-error="true"] { color: #fde68a; }
+    #panel { max-height: 35vh; max-height: 35dvh; min-height: 0; overscroll-behavior: contain; }
+    #panel-header { padding: 8px 12px; color: #94a3b8; }
+    .spot-row { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 6px 8px; min-height: 64px; }
+    .spot-name { overflow-wrap: anywhere; }
+    .spot-badge { grid-column: 2 / -1; justify-self: start; white-space: normal; }
+    .legend { padding: 0; max-width: min(280px, calc(100vw - 76px)); }
+    .legend summary { padding: 12px; min-height: 44px; cursor: pointer; color: #e0f0ff; font-size: 0.78rem; }
+    .legend-items { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; padding: 0 12px 12px; }
+    .legend-item { margin: 0; font-size: 0.75rem; }
+    .legend-item:last-child { grid-column: 1 / -1; }
+    .area-search-btn { min-height: 44px; padding: 8px 12px; border: 1px solid #34516e; border-radius: 8px; background: #0f2640; color: #e0f0ff; font: inherit; font-size: 0.78rem; cursor: pointer; box-shadow: 0 1px 5px #0003; }
+    .area-search-btn:disabled { color: #94a3b8; cursor: wait; }
+    .leaflet-popup-content { min-width: 0; max-width: calc(100vw - 72px); max-height: 45vh; max-height: 45dvh; overflow-y: auto; overflow-wrap: anywhere; }
+    .popup-wind { flex-wrap: wrap; gap: 8px 14px; }
+    .popup-stat:last-child { flex-basis: 100%; }
+    .popup-stat:last-child .val { font-size: 0.95rem; }
+    .edit-btn, .hist-restore, .btn-save, .btn-cancel { min-height: 44px; }
+    .leaflet-touch .leaflet-bar a { width: 40px; height: 40px; line-height: 40px; }
+    #modal-overlay, #history-overlay { padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
+    #modal, #history-modal { max-height: 90dvh; overscroll-behavior: contain; }
+    #modal { padding: 16px; }
+    .form-row input, .form-row textarea, .form-row select { font-size: 16px; min-height: 44px; }
+    .wind-range input { min-width: 0; }
+    .dirs-grid input[type="checkbox"] { width: 20px; min-height: 20px; height: 20px; }
+    .dirs-grid .dir-cb { display: flex; min-height: 44px; align-items: center; gap: 6px; }
+    button:focus-visible, summary:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
+    @media (min-width: 768px) {
+      #topbar { display: flex; gap: 10px; padding: 8px 14px; }
+      #topbar h1 { max-width: 30%; font-size: 1rem; }
+      .tb-btn { padding: 7px 14px; font-size: 0.85rem; }
+      #status { flex: 1; }
+      #panel { max-height: 40dvh; }
+      .spot-row { display: flex; min-height: 48px; }
+      .spot-badge { max-width: 220px; }
+      .popup-stat:last-child { flex-basis: auto; }
+    }
+    @media (max-height: 500px) and (orientation: landscape) {
+      #topbar { grid-template-columns: minmax(0, 1fr) repeat(3, auto); }
+      #topbar h1 { grid-column: auto; }
+      #status { font-size: 0.68rem; }
+      #panel { max-height: 30dvh; }
+    }
   </style>
 </head>
 <body>
@@ -120,11 +175,14 @@
       </svg><span id="site-title" contenteditable="true" spellcheck="false">Windsurf Spots</span>
     </h1>
     <button class="tb-btn" id="locate-btn" onclick="locateMe()">📍 Min position</button>
-    <button class="tb-btn" id="add-btn" onclick="toggleAddMode()">➕ Lägg till spot</button>
-    <span id="status">Laddar…</span>
+    <button class="tb-btn" id="list-btn" aria-controls="panel" aria-expanded="false" onclick="toggleSpotList()">☰ Visa lista</button>
+    <button class="tb-btn" id="add-btn" aria-label="Lägg till spot" aria-pressed="false" onclick="toggleAddMode()">＋ Lägg till</button>
+    <span id="status" role="status">Laddar…</span>
   </div>
-  <div id="map"></div>
-  <div id="panel">
+  <div id="location-status" role="status" hidden></div>
+  <div id="discovery-status" role="status" hidden></div>
+  <div id="map" aria-label="Karta med vindsurfingspotar"></div>
+  <div id="panel" role="region" aria-label="Spotar i synligt område" hidden>
     <div id="panel-header">Spotar i synligt område</div>
     <div id="spot-list"></div>
   </div>
@@ -135,6 +193,8 @@
   <div id="modal">
     <h2 id="modal-title">✏️ Redigera spot</h2>
     <input type="hidden" id="edit-id">
+    <input type="hidden" id="edit-osm-id">
+    <p id="osm-save-note" hidden style="font-size:0.85rem;margin-bottom:14px;color:#bae6fd">Från OpenStreetMap. Kontrollera platsen och fyll i spottyp, svårighetsgrad, bästa vindriktningar och vindgränser innan du sparar.</p>
     <div class="form-row add-only">
       <label>Position (lat / lon)</label>
       <div style="display:flex;gap:8px">
@@ -161,6 +221,7 @@
     <div class="form-row">
       <label>Spottyp</label>
       <select id="edit-type">
+        <option value="">Välj spottyp</option>
         <option value="FLAT_WATER">Flatvatten</option>
         <option value="WAVES">Vågor</option>
         <option value="BUMP_N_JUMP">Bump & Jump</option>
@@ -169,6 +230,7 @@
     <div class="form-row">
       <label>Svårighetsgrad</label>
       <select id="edit-diff">
+        <option value="">Välj svårighetsgrad</option>
         <option value="BEGINNER">Nybörjare</option>
         <option value="INTERMEDIATE">Medel</option>
         <option value="ADVANCED">Avancerad</option>
@@ -236,16 +298,144 @@
 
   const legend = L.control({ position: 'bottomright' });
   legend.onAdd = () => {
-    const div = L.DomUtil.create('div', 'legend');
-    div.innerHTML = Object.entries(COLORS)
+    const div = L.DomUtil.create('details', 'legend');
+    div.open = window.matchMedia('(min-width: 768px)').matches;
+    div.innerHTML = '<summary>Vindförhållanden</summary><div class="legend-items">' + Object.entries(COLORS)
       .map(([k,c]) => `<div class="legend-item"><div class="legend-dot" style="background:${c}"></div>${k}</div>`)
-      .join('');
+      .join('') + '</div>';
+    L.DomEvent.disableClickPropagation(div);
+    L.DomEvent.disableScrollPropagation(div);
     return div;
   };
   legend.addTo(map);
 
+  const areaSearch = L.control({ position: 'topright' });
+  areaSearch.onAdd = () => {
+    const container = L.DomUtil.create('div');
+    const button = L.DomUtil.create('button', 'area-search-btn', container);
+    button.id = 'area-search-btn';
+    button.type = 'button';
+    button.textContent = 'Hitta spotar här';
+    button.title = 'Sök efter spotar runt kartans mittpunkt';
+    button.addEventListener('click', searchMapArea);
+    L.DomEvent.disableClickPropagation(container);
+    L.DomEvent.disableScrollPropagation(container);
+    return container;
+  };
+  areaSearch.addTo(map);
+
+  async function searchMapArea() {
+    const button = document.getElementById('area-search-btn');
+    if (button.disabled) return;
+    const center = map.getCenter().wrap();
+    clearDiscoveries();
+    const generation = discoveryRequest;
+    const radiusKm = Math.max(10, Math.min(700, Math.ceil(center.distanceTo(map.getBounds().getNorthEast()) / 1000)));
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.textContent = 'Söker spotar…';
+    try {
+      await Promise.all([loadSpots(center.lat, center.lng, radiusKm, true), discoverMapArea(generation)]);
+    } finally {
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+      button.textContent = 'Hitta spotar här';
+    }
+  }
+
   let allSpots = [], markers = {}, activeRow = null;
   let addMode = false, addMarker = null;
+  let discoveries = [], discoveryMarkers = {}, discoveryRequest = 0, discoveryController = null;
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function clearDiscoveries() {
+    discoveryRequest++;
+    discoveryController?.abort();
+    discoveries = [];
+    Object.values(discoveryMarkers).forEach(marker => map.removeLayer(marker));
+    discoveryMarkers = {};
+    document.getElementById('discovery-status').hidden = true;
+  }
+
+  async function discoverMapArea(generation) {
+    const bounds = map.getBounds();
+    const center = map.getCenter().wrap();
+    const width = bounds.getEast() - bounds.getWest();
+    const west = center.lng - width / 2, east = center.lng + width / 2;
+    const status = document.getElementById('discovery-status');
+    status.hidden = false;
+    if (width > 3 || bounds.getNorth() - bounds.getSouth() > 3 || west < -180 || east > 180) {
+      status.textContent = 'Zooma in på ett mindre område för att hitta fler spotar i OpenStreetMap.';
+      return;
+    }
+    status.textContent = 'Söker fler spotar i OpenStreetMap…';
+    const controller = discoveryController = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
+    try {
+      const params = new URLSearchParams({ south: bounds.getSouth(), west, north: bounds.getNorth(), east });
+      const res = await fetch('/spots/discover?' + params, { signal: controller.signal });
+      if (!res.ok) throw new Error('Overpass unavailable');
+      const result = await res.json();
+      if (generation !== discoveryRequest) return;
+      discoveries = result.spots;
+      renderDiscoveries();
+      status.textContent = result.message || (discoveries.length
+        ? `${discoveries.length} OSM-fynd. Streckade markeringar saknar vindbetyg. Tryck för att granska och spara.`
+        : 'Inga nya OSM-fynd i området. OpenStreetMaps täckning varierar.');
+    } catch (_) {
+      if (generation === discoveryRequest) status.textContent = 'OpenStreetMap kunde inte nås. Sparade spotar visas fortfarande. Försök igen senare.';
+    } finally { clearTimeout(timeout); }
+  }
+
+  function renderDiscoveries() {
+    const saved = new Set(allSpots.map(r => r.spot.id));
+    discoveries = discoveries.filter(p => !saved.has(p.id));
+    Object.values(discoveryMarkers).forEach(marker => map.removeLayer(marker));
+    discoveryMarkers = {};
+    for (const p of discoveries) {
+      const marker = L.circleMarker([p.latitude, p.longitude], {
+        radius: 10, color: '#a5b4fc', fillColor: '#0f2640', fillOpacity: 0.85, weight: 3, dashArray: '3 3'
+      }).addTo(map);
+      const content = document.createElement('div');
+      content.innerHTML = `<div class="popup-name">${escapeHtml(p.name)}</div>
+        <div class="popup-desc">Från OpenStreetMap · Ej sparad</div>
+        <p class="popup-desc">Vindförhållanden och svårighetsgrad är inte bedömda.</p>
+        <a href="${escapeHtml(p.url)}" target="_blank" rel="noopener noreferrer">Visa i OpenStreetMap</a>
+        <button class="edit-btn">Granska och spara</button>`;
+      content.querySelector('button').addEventListener('click', () => openOsmSpot(p));
+      discoveryMarkers[p.id] = marker.bindPopup(content);
+    }
+    locationMarker?.bringToFront();
+    updateList();
+  }
+
+  function openOsmSpot(p) {
+    openAdd(p.latitude, p.longitude);
+    document.getElementById('edit-osm-id').value = p.id;
+    document.getElementById('osm-save-note').hidden = false;
+    document.getElementById('modal-title').textContent = 'Spara OSM-fynd';
+    for (const [field, value] of Object.entries({ name:p.name, region:p.region, desc:p.description, access:p.accessInfo, type:'', diff:'', min:'', ideal:'', max:'' })) {
+      document.getElementById('edit-' + field).value = value || '';
+    }
+    map.closePopup();
+  }
+
+  function toggleSpotList() {
+    const panel = document.getElementById('panel');
+    panel.hidden = !panel.hidden;
+    const btn = document.getElementById('list-btn');
+    btn.setAttribute('aria-expanded', String(!panel.hidden));
+    btn.textContent = panel.hidden ? '☰ Visa lista' : '☰ Dölj lista';
+    requestAnimationFrame(() => map.invalidateSize({ pan: false }));
+  }
+
+  // Browser chrome, orientation, status messages and the list can all resize the map.
+  if ('ResizeObserver' in window) {
+    new ResizeObserver(() => map.invalidateSize({ pan: false })).observe(document.getElementById('map'));
+  }
 
   function color(cond) { return COLORS[cond] || '#475569'; }
 
@@ -256,8 +446,8 @@
 
   function metaHtml(s) {
     const lines = [];
-    if (s.createdBy) lines.push(`Skapad av <b>${s.createdBy}</b>${s.createdAt ? ' · ' + fmtDate(s.createdAt) : ''}`);
-    if (s.updatedBy) lines.push(`Uppdaterad av <b>${s.updatedBy}</b>${s.updatedAt ? ' · ' + fmtDate(s.updatedAt) : ''}`);
+    if (s.createdBy) lines.push(`Skapad av <b>${escapeHtml(s.createdBy)}</b>${s.createdAt ? ' · ' + fmtDate(s.createdAt) : ''}`);
+    if (s.updatedBy) lines.push(`Uppdaterad av <b>${escapeHtml(s.updatedBy)}</b>${s.updatedAt ? ' · ' + fmtDate(s.updatedAt) : ''}`);
     return lines.length ? `<div class="popup-meta">${lines.join('<br>')}</div>` : '';
   }
 
@@ -274,10 +464,10 @@
   function popupHtml(r) {
     const s = r.spot, w = r.currentWind;
     const dirs = (s.bestDirections || []).join(' · ');
-    const accessHtml = s.accessInfo ? `<div class="popup-access">🅿 ${s.accessInfo}</div>` : '';
+    const accessHtml = s.accessInfo ? `<div class="popup-access">🅿 ${escapeHtml(s.accessInfo)}</div>` : '';
     return `
-      <div class="popup-name">${s.name}</div>
-      <div class="popup-region">${s.region}</div>
+      <div class="popup-name">${escapeHtml(s.name)}</div>
+      <div class="popup-region">${escapeHtml(s.region)}</div>
       <div class="popup-wind">
         <div class="popup-stat"><div class="val">${w.speedMs.toFixed(1)}</div><div class="lbl">m/s</div></div>
         ${w.gustsMs > 0 ? `<div class="popup-stat"><div class="val" style="color:#fbbf24">${w.gustsMs.toFixed(1)}</div><div class="lbl">byvind</div></div>` : ''}
@@ -287,10 +477,10 @@
       <div class="popup-tags">
         <span class="popup-tag">${(s.type||'').replace('_',' ').toLowerCase()}</span>
         <span class="popup-tag">${(s.difficulty||'').toLowerCase()}</span>
-        <span class="popup-tag">Bäst: ${dirs}</span>
+        <span class="popup-tag">Bäst: ${escapeHtml(dirs)}</span>
         <span class="popup-tag">${s.minWindSpeed}–${s.maxWindSpeed} m/s</span>
       </div>
-      ${s.description ? `<div class="popup-desc">${s.description}</div>` : ''}
+      ${s.description ? `<div class="popup-desc">${escapeHtml(s.description)}</div>` : ''}
       ${accessHtml}
       ${metaHtml(s)}
       <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
@@ -298,7 +488,7 @@
            href="https://www.google.com/maps/dir/?api=1&destination=${s.latitude},${s.longitude}"
            target="_blank">🗺 Vägbeskrivning</a>
         <button class="edit-btn" style="flex:1;min-width:80px" onclick="openEdit('${s.id}')">✏️ Redigera</button>
-        <button class="edit-btn" style="flex:1;min-width:80px;color:#f59e0b;border-color:#f59e0b44" onclick="openHistory('${s.id}','${s.name.replace(/'/g,"\\'")}')">📋 Historik</button>
+        <button class="edit-btn" style="flex:1;min-width:80px;color:#f59e0b;border-color:#f59e0b44" onclick="openHistoryForSpot('${s.id}')">📋 Historik</button>
       </div>`;
   }
 
@@ -306,11 +496,11 @@
     const s = r.spot, w = r.currentWind;
     const c = color(r.conditions);
     return `
-      <div class="spot-row" id="row-${s.id}" onclick="focusSpot('${s.id}')">
+      <div class="spot-row" id="row-${s.id}" role="button" tabindex="0" onclick="focusSpot('${s.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();focusSpot('${s.id}');}">
         <div class="spot-dot" style="background:${c}"></div>
         <div style="flex:1;min-width:0">
-          <div class="spot-name">${s.name}</div>
-          <div class="spot-region">${s.region}</div>
+          <div class="spot-name">${escapeHtml(s.name)}</div>
+          <div class="spot-region">${escapeHtml(s.region)}</div>
         </div>
         <div class="spot-wind">
           <div class="speed">${w.speedMs.toFixed(1)} m/s</div>
@@ -326,6 +516,7 @@
     document.getElementById('row-' + id)?.classList.add('active');
   }
   function scrollToRow(id) {
+    if (document.getElementById('panel').hidden) return;
     document.getElementById('row-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
   function focusSpot(id) {
@@ -346,39 +537,110 @@
     document.getElementById('spot-list').innerHTML = visible.length
       ? visible.map(spotRowHtml).join('')
       : '<p style="padding:12px;color:#64748b;font-size:0.85rem">Inga spotar synliga — zooma ut.</p>';
+    const candidates = discoveries.filter(p => bounds.contains([p.latitude, p.longitude]));
+    if (candidates.length) {
+      const list = document.getElementById('spot-list');
+      const heading = document.createElement('p');
+      heading.className = 'popup-desc';
+      heading.textContent = `Från OpenStreetMap · ${candidates.length} osparade fynd utan vindbetyg`;
+      list.append(heading);
+      for (const candidate of candidates) {
+        const button = document.createElement('button');
+        button.className = 'edit-btn';
+        button.textContent = candidate.name;
+        button.addEventListener('click', () => discoveryMarkers[candidate.id]?.openPopup());
+        list.append(button);
+      }
+    }
   }
 
-  async function loadSpots(lat, lon) {
+  let spotsRequest = 0;
+  async function loadSpots(lat, lon, radiusKm = 700, keepDiscoveries = false) {
+    if (!keepDiscoveries) clearDiscoveries();
+    const request = ++spotsRequest;
     setStatus('Hämtar vinddata…');
     try {
-      const res = await fetch(`/spots/top?lat=${lat}&lon=${lon}&radius_km=700&limit=50`);
+      const res = await fetch(`/spots/top?lat=${lat}&lon=${lon}&radius_km=${radiusKm}&limit=50`);
       if (!res.ok) throw new Error(`Serverfel ${res.status}`);
-      allSpots = await res.json();
+      const data = await res.json();
+      if (request !== spotsRequest) return;
+      allSpots = data;
       Object.values(markers).forEach(m => map.removeLayer(m));
       markers = {};
       allSpots.forEach(r => { markers[r.spot.id] = makeMarker(r); });
+      locationMarker?.bringToFront();
       updateList();
-      setStatus(`${allSpots.length} spotar laddade`);
-    } catch (e) { setStatus(`Fel: ${e.message}`); }
+      if (keepDiscoveries) renderDiscoveries();
+      setStatus(allSpots.length ? `${allSpots.length} spotar laddade` : 'Inga sparade spotar hittades i området.');
+    } catch (e) { if (request === spotsRequest) setStatus(`Fel: ${e.message}`); }
   }
 
   function setStatus(msg) { document.getElementById('status').textContent = msg; }
 
+  let locationMarker = null, accuracyCircle = null;
+  function locationStatus(message, error = false) {
+    const status = document.getElementById('location-status');
+    status.hidden = false;
+    status.dataset.error = String(error);
+    status.textContent = message;
+  }
+
   function locateMe() {
     const btn = document.getElementById('locate-btn');
-    if (!navigator.geolocation) { setStatus('Geolokalisering stöds inte.'); return; }
+    if (btn.disabled) return;
+    if (!window.isSecureContext) { locationStatus('Min position kräver HTTPS. Öppna webbplatsens https-adress.', true); return; }
+    if (!navigator.geolocation) { locationStatus('Den här webbläsaren stöder inte platsåtkomst.', true); return; }
     btn.disabled = true;
-    setStatus('Hämtar position…');
-    navigator.geolocation.getCurrentPosition(
-      pos => {
+    btn.setAttribute('aria-busy', 'true');
+    locationStatus('Hämtar din position… Tillåt platsåtkomst om webbläsaren frågar.');
+    let finished = false;
+    const finish = () => {
+      finished = true;
+      clearTimeout(watchdog);
+      btn.disabled = false;
+      btn.removeAttribute('aria-busy');
+    };
+    // Some browsers wait indefinitely for a permission dialog before starting their timeout.
+    const watchdog = setTimeout(() => {
+      finish();
+      locationStatus('Positionen tog för lång tid. Kontrollera platsåtkomst och tryck på Min position igen.', true);
+    }, 50000);
+    const success = pos => {
+        if (finished) return;
+        finish();
         const { latitude, longitude } = pos.coords;
-        map.setView([latitude, longitude], 8, { animate: true });
+        const accuracy = Math.max(0, pos.coords.accuracy || 0);
+        if (locationMarker) map.removeLayer(locationMarker);
+        if (accuracyCircle) map.removeLayer(accuracyCircle);
+        accuracyCircle = L.circle([latitude, longitude], { radius: accuracy, color: '#0284c7', weight: 1, fillOpacity: 0.1, interactive: false }).addTo(map);
+        locationMarker = L.circleMarker([latitude, longitude], { radius: 8, color: '#fff', weight: 3, fillColor: '#0284c7', fillOpacity: 1 }).addTo(map).bindPopup('Din position');
+        map.setView([latitude, longitude], accuracy > 10000 ? 8 : 10);
+        locationStatus(`Din position visas med blå markering (ungefär ±${accuracy >= 1000 ? (accuracy / 1000).toFixed(1) + ' km' : Math.round(accuracy) + ' m'}).`);
         loadSpots(latitude, longitude);
-        btn.disabled = false;
-      },
-      err => { setStatus(`Positionsfel: ${err.message}`); btn.disabled = false; },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
+    };
+    const failure = err => {
+      if (finished) return;
+      finish();
+      const messages = {
+        1: 'Platsåtkomst är blockerad. Tillåt plats för webbplatsen och webbläsaren i telefonens inställningar. På iPhone: Inställningar → Integritet och säkerhet → Platstjänster → Chrome eller Safari-webbplatser.',
+        2: 'Din position kunde inte hittas. Kontrollera att Platstjänster är på och försök igen.',
+        3: 'Positionen tog för lång tid. Försök igen, gärna nära ett fönster eller utomhus.'
+      };
+      locationStatus(messages[err.code] || 'Kunde inte hämta positionen. Kontrollera platsåtkomst och försök igen.', true);
+    };
+    // Start with a recent/coarse fix; demanding GPS immediately can time out indoors on phones.
+    const requestPosition = highAccuracy => {
+      try {
+        navigator.geolocation.getCurrentPosition(success, err => {
+          if (finished) return;
+          if (!highAccuracy && (err.code === 2 || err.code === 3)) {
+            locationStatus('Söker fortfarande efter din position…');
+            requestPosition(true);
+          } else failure(err);
+        }, { enableHighAccuracy: highAccuracy, timeout: 20000, maximumAge: highAccuracy ? 0 : 60000 });
+      } catch (_) { failure({ code: 1 }); }
+    };
+    requestPosition(false);
   }
 
   // ---- Add mode ----
@@ -386,14 +648,15 @@
     addMode = !addMode;
     const btn = document.getElementById('add-btn');
     const mapEl = document.getElementById('map');
+    btn.setAttribute('aria-pressed', String(addMode));
     if (addMode) {
       btn.classList.add('add-active');
       btn.textContent = '✕ Avbryt';
       mapEl.classList.add('map-add-cursor');
-      setStatus('Klicka på kartan för att lägga till ett nytt spot');
+      setStatus('Tryck på kartan för att lägga till ett nytt spot');
     } else {
       btn.classList.remove('add-active');
-      btn.textContent = '➕ Lägg till spot';
+      btn.textContent = '＋ Lägg till';
       mapEl.classList.remove('map-add-cursor');
       setStatus(`${allSpots.length} spotar laddade`);
       clearAddMarker();
@@ -405,6 +668,8 @@
   }
 
   function openAdd(lat, lon) {
+    document.getElementById('edit-osm-id').value = '';
+    document.getElementById('osm-save-note').hidden = true;
     document.getElementById('edit-id').value = '';
     document.getElementById('edit-lat').value = lat.toFixed(5);
     document.getElementById('edit-lon').value = lon.toFixed(5);
@@ -435,6 +700,8 @@
 
   // ---- Edit modal ----
   function openEdit(spotId) {
+    document.getElementById('edit-osm-id').value = '';
+    document.getElementById('osm-save-note').hidden = true;
     const r = allSpots.find(s => s.spot.id === spotId);
     if (!r) return;
     const s = r.spot;
@@ -470,12 +737,14 @@
   async function saveSpot() {
     const id = document.getElementById('edit-id').value;
     const isAdd = !id;
+    const osmId = document.getElementById('edit-osm-id').value;
     const dirs = [...document.querySelectorAll('.dirs-grid input:checked')].map(cb => cb.value);
     const name = document.getElementById('edit-name').value.trim();
     if (!name) { alert('Namn krävs'); return; }
 
     const body = {
       name,
+      osmId: isAdd && osmId ? osmId : undefined,
       latitude:      isAdd ? parseFloat(document.getElementById('edit-lat').value) : undefined,
       longitude:     isAdd ? parseFloat(document.getElementById('edit-lon').value) : undefined,
       region:        document.getElementById('edit-region').value.trim(),
@@ -488,6 +757,10 @@
       maxWindSpeed:  parseFloat(document.getElementById('edit-max').value) || 0,
       bestDirections: dirs.length ? dirs : undefined
     };
+    if (body.osmId && (!body.type || !body.difficulty || !dirs.length || !(body.minWindSpeed > 0 && body.minWindSpeed < body.idealWindSpeed && body.idealWindSpeed < body.maxWindSpeed))) {
+      alert('Komplettera spottyp, svårighetsgrad, bästa vindriktningar och vindgränser (min < ideal < max) innan du sparar OSM-fyndet.');
+      return;
+    }
 
     try {
       const url = isAdd ? '/spots' : `/spots/${id}`;
@@ -600,6 +873,10 @@
   // ---- History modal ----
   let historySpotId = null;
 
+  function openHistoryForSpot(id) {
+    openHistory(id, allSpots.find(r => r.spot.id === id)?.spot.name || 'Spot');
+  }
+
   async function openHistory(spotId, spotName) {
     historySpotId = spotId;
     document.getElementById('history-spot-name').textContent = spotName;
@@ -637,12 +914,12 @@
         return `
           <div class="hist-entry">
             <div class="hist-meta">
-              <span class="hist-who">v${version} · ${log.changedBy || 'Okänd'}</span>
+              <span class="hist-who">v${version} · ${escapeHtml(log.changedBy || 'Okänd')}</span>
               <span class="hist-action ${log.action}">${log.action}</span>
             </div>
             <div class="hist-date">${dt}</div>
             ${sourceNote}
-            <div class="hist-desc">${desc}</div>
+            <div class="hist-desc">${escapeHtml(desc)}</div>
             ${restoreBtn}
           </div>`;
       }).join('');

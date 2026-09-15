@@ -9,6 +9,24 @@ deployar till Cloud Run utan Dockerfile, enligt samma upplägg som booking-servi
 Följ [deployguiden](CLOUD_RUN.md) för GitLab-triggern och Cloud Run-inställningarna.
 Äldre H2-/PostgreSQL-beskrivningar längre ned avser den tidigare databaslösningen.
 
+## Hitta fler spotar på kartan
+
+**Hitta spotar här** hämtar sparade spotar runt kartans mitt och söker samtidigt efter
+vindsurfing-/kitesurfingplatser i OpenStreetMap via Overpass. Zooma in till ett område
+som är högst 3 grader brett och högt för OSM-sökningen. OSM-fynd visas med streckade
+markeringar och utan vindbetyg; de sparas inte automatiskt.
+
+Välj **Granska och spara**, komplettera spottyp, svårighetsgrad, bästa vindriktningar
+och vindgränser och ange bomkod för att spara. Samma OSM-objekt kan inte sparas två
+gånger via detta flöde. OSM-länk och källinformation följer med fyndet.
+
+`GET /spots/discover?south=39&west=2&north=40&east=3` är en läsoperation.
+Resultat cachas i en timme per appinstans, med högst 100 områden och 100 fynd per
+område. Små kartförflyttningar delar cache. Vid Overpass-fel används en minuts paus
+före nya försök; frontend väntar högst 25 sekunder. Sparade spotar hämtas oberoende
+av Overpass. Cache försvinner när Cloud Run-instansen avslutas och delas inte mellan
+instanser. OSM-täckning varierar; ett tomt resultat betyder inte att området saknar spotar.
+
 ---
 
 ## Vad tjänsten gör

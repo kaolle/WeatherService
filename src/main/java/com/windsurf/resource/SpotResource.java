@@ -61,8 +61,27 @@ public class SpotResource {
         if (req.name() == null || req.name().isBlank()) {
             return Response.status(400).entity(Map.of("error", "name krävs")).build();
         }
+        boolean fromOsm = req.osmId() != null;
+        if (fromOsm && (!req.osmId().matches("osm-(?:(?:way|relation)-)?[1-9][0-9]{0,17}")
+                || req.type() == null || req.difficulty() == null || req.bestDirections() == null || req.bestDirections().isEmpty()
+                || !req.bestDirections().stream().allMatch(java.util.Set.of("N", "NE", "E", "SE", "S", "SW", "W", "NW")::contains)
+                || !Double.isFinite(req.latitude()) || !Double.isFinite(req.longitude()) || Math.abs(req.latitude()) > 90 || Math.abs(req.longitude()) > 180
+                || !Double.isFinite(req.minWindSpeed()) || !Double.isFinite(req.idealWindSpeed()) || !Double.isFinite(req.maxWindSpeed())
+                || req.minWindSpeed() <= 0 || req.minWindSpeed() >= req.idealWindSpeed() || req.idealWindSpeed() >= req.maxWindSpeed())) {
+            return Response.status(400).entity(Map.of("error", "Komplettera OSM-fyndet med spottyp, svårighetsgrad, vindriktningar och min < ideal < max-vind.")).build();
+        }
+        if (fromOsm && SpotEntity.find("externalId", req.osmId()).count() > 0) {
+            return Response.status(409).entity(Map.of("error", "Den här OSM-spoten är redan sparad.")).build();
+        }
         SpotEntity entity = new SpotEntity();
-        entity.externalId = UUID.randomUUID().toString();
+        entity.externalId = fromOsm ? req.osmId() : UUID.randomUUID().toString();
+        if (fromOsm) {
+            String[] parts = req.osmId().split("-");
+            int type = parts.length == 2 ? 1 : parts[1].equals("way") ? 2 : 3;
+            // Deterministic _id makes simultaneous saves of the same OSM element conflict atomically.
+            entity.id = new org.bson.types.ObjectId(java.nio.ByteBuffer.allocate(12)
+                    .putInt(0x4f534d00 + type).putLong(Long.parseLong(parts[parts.length - 1])).array());
+        }
         entity.name = req.name().strip();
         entity.latitude = req.latitude();
         entity.longitude = req.longitude();
@@ -77,11 +96,18 @@ public class SpotResource {
         entity.bestDirections = (req.bestDirections() != null && !req.bestDirections().isEmpty())
             ? req.bestDirections()
             : List.of("W", "SW", "S", "SE", "E", "NE", "N", "NW");
-        entity.source = SpotSource.USER;
+        entity.source = fromOsm ? SpotSource.OSM : SpotSource.USER;
         entity.approved = true;
         entity.createdBy = userName;
         entity.createdAt = LocalDateTime.now().toString();
-        entity.persist();
+        try {
+            entity.persist();
+        } catch (com.mongodb.MongoWriteException ex) {
+            if (fromOsm && ex.getError().getCode() == 11000) {
+                return Response.status(409).entity(Map.of("error", "Den här OSM-spoten är redan sparad.")).build();
+            }
+            throw ex;
+        }
         logChange(entity.externalId, entity.name, "CREATED", userName, entity);
         return Response.status(201).entity(Map.of("id", entity.externalId, "name", entity.name)).build();
     }

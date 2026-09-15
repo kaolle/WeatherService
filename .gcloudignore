@@ -1,0 +1,11 @@
+*
+!.gcloudignore
+!cloudbuild.yaml
+!gradlew
+!settings.gradle
+!build.gradle
+!gradle.properties
+!gradle/
+!gradle/**
+!src/
+!src/**
