@@ -4,11 +4,13 @@ import com.windsurf.client.OverpassDiscoveryClient;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.BadRequestException;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
+import org.jboss.logging.Logger;
 import java.time.Clock;
 import java.util.*;
 
 @ApplicationScoped
 public class SpotDiscoveryService {
+    private static final Logger LOG = Logger.getLogger(SpotDiscoveryService.class);
     @RestClient
     OverpassDiscoveryClient client;
     Clock clock = Clock.systemUTC();
@@ -35,10 +37,19 @@ public class SpotDiscoveryService {
         Entry entry = cache.get(box);
         if (entry != null) return within(entry.spots, south, west, north, east);
         if (now < retryAfter) return new Result(List.of(), "OpenStreetMap-sökningen är tillfälligt pausad. Försök igen om en minut.");
+        long startedAt = System.nanoTime();
+        String query = "[out:json][timeout:12];nwr[\"sport\"~\"(^|;)(windsurfing|kitesurfing|kiteboarding|kite_surfing|kite|kiting|surfing)(;|$)\",i](" + box + ");out center 100;";
         try {
-            var response = client.query("[out:json][timeout:12][maxsize:16777216];nwr[\"sport\"~\"(^|;)(windsurfing|kitesurfing|kiteboarding)(;|$)\"](" + box + ");out center 100;");
-            if (response == null || response.elements() == null || response.remark() != null && !response.remark().isBlank()) {
-                throw new IllegalStateException("Incomplete Overpass response");
+            LOG.infof("Overpass discovery started: bbox=%s", box);
+            var response = client.query(query);
+            if (response == null) {
+                throw new IllegalStateException("response was null");
+            }
+            if (response.elements() == null) {
+                throw new IllegalStateException("response did not contain elements");
+            }
+            if (response.remark() != null && !response.remark().isBlank()) {
+                throw new IllegalStateException("Overpass remark: " + response.remark());
             }
             Map<String, Candidate> unique = new LinkedHashMap<>();
             for (var el : response.elements()) {
@@ -57,11 +68,19 @@ public class SpotDiscoveryService {
             if (cache.size() >= 100) cache.remove(cache.keySet().iterator().next());
             var spots = List.copyOf(unique.values());
             cache.put(box, new Entry(spots, clock.millis() + 3_600_000));
+            LOG.infof("Overpass discovery completed: bbox=%s elements=%d candidates=%d durationMs=%d",
+                    box, response.elements().size(), spots.size(), elapsedMillis(startedAt));
             return within(spots, south, west, north, east);
         } catch (RuntimeException ex) {
             retryAfter = clock.millis() + 60_000;
+            LOG.errorf(ex, "Overpass discovery failed: bbox=%s durationMs=%d exception=%s message=%s",
+                    box, elapsedMillis(startedAt), ex.getClass().getName(), ex.getMessage());
             return new Result(List.of(), "OpenStreetMap kunde inte nås. Sparade spotar visas fortfarande. Försök igen senare.");
         }
+    }
+
+    private long elapsedMillis(long startedAt) {
+        return (System.nanoTime() - startedAt) / 1_000_000;
     }
 
     private Result within(List<Candidate> spots, double s, double w, double n, double e) {
