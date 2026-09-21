@@ -10,6 +10,7 @@ import java.util.*;
 
 @ApplicationScoped
 public class SpotDiscoveryService {
+    private static final double MAX_DISCOVERY_SPAN = 1.0;
     private static final Logger LOG = Logger.getLogger(SpotDiscoveryService.class);
     @RestClient
     OverpassDiscoveryClient client;
@@ -25,7 +26,7 @@ public class SpotDiscoveryService {
     public synchronized Result discover(double south, double west, double north, double east) {
         if (!Double.isFinite(south) || !Double.isFinite(west) || !Double.isFinite(north) || !Double.isFinite(east)
                 || south < -85 || north > 85 || west < -180 || east > 180
-                || south >= north || west >= east || north - south > 3 || east - west > 3) {
+                || south >= north || west >= east || north - south > MAX_DISCOVERY_SPAN || east - west > MAX_DISCOVERY_SPAN) {
             throw new BadRequestException("Zooma in till ett mindre område för att söka i OpenStreetMap.");
         }
         // Round outwards so small pans reuse results without omitting viewport edges.

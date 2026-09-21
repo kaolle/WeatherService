@@ -122,6 +122,16 @@ public class SpotResource {
         if (entity == null) {
             return Response.status(404).entity(Map.of("error", "Spot hittades inte: " + id)).build();
         }
+        if ((req.latitude() != null && !Double.isFinite(req.latitude())) || (req.longitude() != null && !Double.isFinite(req.longitude()))
+                || (req.latitude() != null && (req.latitude() < -90 || req.latitude() > 90))
+                || (req.longitude() != null && (req.longitude() < -180 || req.longitude() > 180))) {
+            return Response.status(400).entity(Map.of("error", "Ogiltig position")).build();
+        }
+        if ((req.latitude() == null) != (req.longitude() == null)) {
+            return Response.status(400).entity(Map.of("error", "Latitud och longitud måste anges tillsammans")).build();
+        }
+        if (req.latitude() != null) entity.latitude = req.latitude();
+        if (req.longitude() != null) entity.longitude = req.longitude();
         if (req.name() != null && !req.name().isBlank())       entity.name = req.name().strip();
         if (req.description() != null)                          entity.description = req.description();
         if (req.accessInfo() != null)                           entity.accessInfo = req.accessInfo();
@@ -156,6 +166,8 @@ public class SpotResource {
         log.changedAt = LocalDateTime.now().toString();
         try {
             Map<String, Object> snapshot = new LinkedHashMap<>();
+            snapshot.put("latitude", entity.latitude);
+            snapshot.put("longitude", entity.longitude);
             snapshot.put("name", entity.name);
             snapshot.put("region", entity.region);
             snapshot.put("description", entity.description);
@@ -206,6 +218,10 @@ public class SpotResource {
 
         if (snap.containsKey("name") && snap.get("name") != null)
             entity.name = snap.get("name").toString();
+        if (snap.containsKey("latitude") && snap.get("latitude") instanceof Number)
+            entity.latitude = ((Number) snap.get("latitude")).doubleValue();
+        if (snap.containsKey("longitude") && snap.get("longitude") instanceof Number)
+            entity.longitude = ((Number) snap.get("longitude")).doubleValue();
         if (snap.containsKey("region"))
             entity.region = snap.get("region") != null ? snap.get("region").toString() : null;
         if (snap.containsKey("description"))

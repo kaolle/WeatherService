@@ -91,6 +91,10 @@
     .form-row { margin-bottom: 12px; }
     .form-row label { display: block; font-size: 0.78rem; color: #94a3b8; margin-bottom: 4px; }
     .form-row input, .form-row textarea, .form-row select { width: 100%; padding: 8px 10px; background: #0a1628; border: 1px solid #1e3a5f; border-radius: 7px; color: #e0f0ff; font-size: 0.875rem; }
+    .position-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: end; }
+    .position-fields label { display: block; font-size: 0.7rem; color: #64748b; margin-bottom: 3px; }
+    .position-pick-btn { grid-column: 1 / -1; min-height: 38px; padding: 8px 10px; border: 1px solid #34516e; border-radius: 7px; background: #1e3a5f; color: #bae6fd; font: inherit; font-size: 0.75rem; cursor: pointer; white-space: nowrap; }
+    .position-pick-btn:hover { background: #2a4a6f; }
     .form-row textarea { min-height: 70px; resize: vertical; }
     .form-row input:focus, .form-row textarea:focus, .form-row select:focus { outline: none; border-color: #0ea5e9; }
     .form-row select option { background: #0f2640; }
@@ -142,6 +146,8 @@
     .dirs-grid .dir-cb { display: flex; min-height: 44px; align-items: center; gap: 6px; }
     button:focus-visible, summary:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
     @media (min-width: 768px) {
+      .position-fields { grid-template-columns: 1fr 1fr auto; }
+      .position-pick-btn { grid-column: auto; }
       #topbar { display: flex; gap: 10px; padding: 8px 14px; }
       #topbar h1 { max-width: 30%; font-size: 1rem; }
       .tb-btn { padding: 7px 14px; font-size: 0.85rem; }
@@ -197,11 +203,12 @@
     <input type="hidden" id="edit-id">
     <input type="hidden" id="edit-osm-id">
     <p id="osm-save-note" hidden style="font-size:0.85rem;margin-bottom:14px;color:#bae6fd">Från OpenStreetMap. Kontrollera platsen och fyll i spottyp, svårighetsgrad, bästa vindriktningar och vindgränser innan du sparar.</p>
-    <div class="form-row add-only">
-      <label>Position (lat / lon)</label>
-      <div style="display:flex;gap:8px">
-        <input id="edit-lat" type="text" readonly style="color:#7dd3fc">
-        <input id="edit-lon" type="text" readonly style="color:#7dd3fc">
+    <div class="form-row">
+      <label>Position</label>
+      <div class="position-fields">
+        <div><label for="edit-lat">Latitud</label><input id="edit-lat" type="number" step="0.00001" min="-90" max="90"></div>
+        <div><label for="edit-lon">Longitud</label><input id="edit-lon" type="number" step="0.00001" min="-180" max="180"></div>
+        <button id="pick-position-btn" class="position-pick-btn" type="button" onclick="pickPosition()">📍 Välj på karta</button>
       </div>
     </div>
     <div class="form-row">
@@ -346,7 +353,7 @@
   }
 
   let allSpots = [], markers = {}, activeRow = null;
-  let addMode = false, addMarker = null;
+  let addMode = false, addMarker = null, positionPickMode = false;
   let discoveries = [], discoveryMarkers = {}, discoveryRequest = 0, discoveryController = null;
 
   function escapeHtml(value) {
@@ -369,13 +376,13 @@
     const west = center.lng - width / 2, east = center.lng + width / 2;
     const status = document.getElementById('discovery-status');
     status.hidden = false;
-    if (width > 3 || bounds.getNorth() - bounds.getSouth() > 3 || west < -180 || east > 180) {
+    if (width > 1 || bounds.getNorth() - bounds.getSouth() > 1 || west < -180 || east > 180) {
       status.textContent = 'Zooma in på ett mindre område för att hitta fler spotar i OpenStreetMap.';
       return;
     }
     status.textContent = 'Söker fler spotar i OpenStreetMap…';
     const controller = discoveryController = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
+    const timeout = setTimeout(() => controller.abort(), 35000);
     try {
       const params = new URLSearchParams({ south: bounds.getSouth(), west, north: bounds.getNorth(), east });
       const res = await fetch('/spots/discover?' + params, { signal: controller.signal });
@@ -557,6 +564,19 @@
   }
 
   let spotsRequest = 0;
+  let mapLoadTimer = null;
+
+  function loadVisibleArea() {
+    const center = map.getCenter().wrap();
+    const radiusKm = Math.max(10, Math.min(700, Math.ceil(center.distanceTo(map.getBounds().getNorthEast()) / 1000)));
+    loadSpots(center.lat, center.lng, radiusKm);
+  }
+
+  function scheduleVisibleAreaLoad() {
+    clearTimeout(mapLoadTimer);
+    mapLoadTimer = setTimeout(loadVisibleArea, 600);
+  }
+
   async function loadSpots(lat, lon, radiusKm = 700, keepDiscoveries = false) {
     if (!keepDiscoveries) clearDiscoveries();
     const request = ++spotsRequest;
@@ -691,7 +711,24 @@
     document.getElementById('modal-overlay').classList.add('open');
   }
 
+  function pickPosition() {
+    positionPickMode = true;
+    document.getElementById('modal-overlay').classList.remove('open');
+    document.getElementById('map').classList.add('map-add-cursor');
+    setStatus('Klicka på kartan för att välja spotens nya position');
+  }
+
   map.on('click', e => {
+    if (positionPickMode) {
+      positionPickMode = false;
+      document.getElementById('map').classList.remove('map-add-cursor');
+      document.getElementById('edit-lat').value = e.latlng.lat.toFixed(5);
+      document.getElementById('edit-lon').value = e.latlng.lng.toFixed(5);
+      if (addMarker) addMarker.setLatLng(e.latlng);
+      document.getElementById('modal-overlay').classList.add('open');
+      setStatus('Position vald. Kontrollera uppgifterna och tryck Spara.');
+      return;
+    }
     if (!addMode) return;
     clearAddMarker();
     addMarker = L.marker(e.latlng, {
@@ -708,6 +745,8 @@
     if (!r) return;
     const s = r.spot;
     document.getElementById('edit-id').value = spotId;
+    document.getElementById('edit-lat').value = Number(s.latitude).toFixed(5);
+    document.getElementById('edit-lon').value = Number(s.longitude).toFixed(5);
     document.getElementById('edit-name').value = s.name || '';
     document.getElementById('edit-region').value = s.region || '';
     document.getElementById('edit-desc').value = s.description || '';
@@ -747,8 +786,8 @@
     const body = {
       name,
       osmId: isAdd && osmId ? osmId : undefined,
-      latitude:      isAdd ? parseFloat(document.getElementById('edit-lat').value) : undefined,
-      longitude:     isAdd ? parseFloat(document.getElementById('edit-lon').value) : undefined,
+      latitude:      parseFloat(document.getElementById('edit-lat').value),
+      longitude:     parseFloat(document.getElementById('edit-lon').value),
       region:        document.getElementById('edit-region').value.trim(),
       description:   document.getElementById('edit-desc').value.trim(),
       accessInfo:    document.getElementById('edit-access').value.trim(),
@@ -759,6 +798,11 @@
       maxWindSpeed:  parseFloat(document.getElementById('edit-max').value) || 0,
       bestDirections: dirs.length ? dirs : undefined
     };
+    if (!Number.isFinite(body.latitude) || body.latitude < -90 || body.latitude > 90
+        || !Number.isFinite(body.longitude) || body.longitude < -180 || body.longitude > 180) {
+      alert('Ange en giltig position.');
+      return;
+    }
     if (body.osmId && (!body.type || !body.difficulty || !dirs.length || !(body.minWindSpeed > 0 && body.minWindSpeed < body.idealWindSpeed && body.idealWindSpeed < body.maxWindSpeed))) {
       alert('Komplettera spottyp, svårighetsgrad, bästa vindriktningar och vindgränser (min < ideal < max) innan du sparar OSM-fyndet.');
       return;
@@ -950,7 +994,10 @@
     if (e.target === document.getElementById('history-overlay')) closeHistory();
   });
 
-  map.on('moveend', updateList);
+  map.on('moveend', () => {
+    updateList();
+    scheduleVisibleAreaLoad();
+  });
   loadSpots(58.0, 16.5);
 </script>
 </body>

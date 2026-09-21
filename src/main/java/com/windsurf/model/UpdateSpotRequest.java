@@ -3,6 +3,8 @@ package com.windsurf.model;
 import java.util.List;
 
 public record UpdateSpotRequest(
+    Double latitude,
+    Double longitude,
     String name,
     String description,
     String accessInfo,
