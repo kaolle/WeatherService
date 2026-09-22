@@ -1,6 +1,7 @@
 package com.windsurf.service;
 
 import com.windsurf.model.*;
+import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -11,6 +12,7 @@ import java.util.List;
 public class SpotSeedService {
 
     void onStart(@Observes StartupEvent ev) {
+        if (LaunchMode.current() == LaunchMode.TEST) return;
         seedIfEmpty();
     }
 
