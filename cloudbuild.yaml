@@ -1,5 +1,24 @@
 # GitLab trigger: build with Google Buildpacks, then update the Cloud Run service.
 steps:
+  - id: Run tests
+    name: gcr.io/cloud-builders/docker
+    args:
+      - run
+      - --rm
+      # Share the worker's network so mapped MongoDB/Ryuk ports are reachable at localhost.
+      - --network=host
+      - --volume=/var/run/docker.sock:/var/run/docker.sock
+      - --volume=/workspace:/workspace
+      - --workdir=/workspace
+      - --env=DOCKER_HOST=unix:///var/run/docker.sock
+      - --env=TESTCONTAINERS_HOST_OVERRIDE=localhost
+      - eclipse-temurin:17-jdk
+      - ./gradlew
+      - clean
+      - test
+      - --no-daemon
+      - --console=plain
+
   - id: Build and push image
     name: gcr.io/k8s-skaffold/pack
     args:
@@ -9,7 +28,8 @@ steps:
       - --path=.
       - --publish
       - --env=GOOGLE_RUNTIME_VERSION=17
-      - --env=GOOGLE_GRADLE_BUILD_ARGS=clean build --no-daemon
+      # Run integration tests separately with Docker; it is unavailable inside the buildpack.
+      - --env=GOOGLE_GRADLE_BUILD_ARGS=clean assemble -x test --no-daemon
       # Quarkus fast-jar lives outside Gradle's usual build/libs directory.
       - --env=GOOGLE_BUILDABLE=build/quarkus-app
       - --env=GOOGLE_ENTRYPOINT=java -XX:MaxRAMPercentage=70.0 -XX:+ExitOnOutOfMemoryError -jar build/quarkus-app/quarkus-run.jar
