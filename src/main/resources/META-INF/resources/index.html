@@ -574,7 +574,7 @@
 
   function scheduleVisibleAreaLoad() {
     clearTimeout(mapLoadTimer);
-    mapLoadTimer = setTimeout(loadVisibleArea, 1000);
+    mapLoadTimer = setTimeout(loadVisibleArea, 2000);
   }
 
   async function loadSpots(lat, lon, radiusKm = 700, keepDiscoveries = false) {
