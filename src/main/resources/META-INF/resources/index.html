@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Windsurf Spots</title>
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0a1628">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Windsurf">
+  <link rel="apple-touch-icon" href="/icon.svg">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -495,7 +501,7 @@
       <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
         <a class="edit-btn directions-btn" style="text-decoration:none;text-align:center;flex:1;min-width:100px"
            href="https://www.google.com/maps/dir/?api=1&destination=${s.latitude},${s.longitude}"
-           target="_blank">🗺 Vägen dit</a>
+           target="_blank">🗺 Vägen hit</a>
         <button class="edit-btn" style="flex:1;min-width:80px" onclick="openEdit('${s.id}')">✏️ Redigera</button>
         <button class="edit-btn" style="flex:1;min-width:80px;color:#f59e0b;border-color:#f59e0b44" onclick="openHistoryForSpot('${s.id}')">📋 Historik</button>
       </div>`;
@@ -999,6 +1005,12 @@
     scheduleVisibleAreaLoad();
   });
   loadSpots(58.0, 16.5);
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(e => console.warn('SW reg failed', e));
+    });
+  }
 </script>
 </body>
 </html>

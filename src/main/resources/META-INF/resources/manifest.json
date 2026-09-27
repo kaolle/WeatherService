@@ -1,0 +1,15 @@
+{
+  "name": "Windsurf Spots",
+  "short_name": "Windsurf",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0a1628",
+  "theme_color": "#0a1628",
+  "orientation": "any",
+  "lang": "sv",
+  "description": "Hitta bästa vindsurf-spoterna baserat på aktuell vind",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
