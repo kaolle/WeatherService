@@ -39,7 +39,7 @@ public class BackgroundDiscoveryService {
     @Inject
     CountryLookupService countryLookup;
 
-    @Scheduled(every = "3m", delayed = "30s", concurrentExecution = ConcurrentExecution.SKIP)
+    @Scheduled(every = "${windsurf.background-discovery.every:off}", delayed = "30s", concurrentExecution = ConcurrentExecution.SKIP)
     void importNextPopularTile() {
         long interests = ViewportInterestEntity.count();
         long areas = ImportedAreaEntity.count();
