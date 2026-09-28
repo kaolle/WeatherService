@@ -1,13 +1,11 @@
-const VERSION = 'v1';
+const VERSION = 'v3';
 const SHELL_CACHE = `windsurf-shell-${VERSION}`;
 const TILES_CACHE = `windsurf-tiles-${VERSION}`;
 const API_CACHE   = `windsurf-api-${VERSION}`;
 
+// Only pre-cache immutable CDN assets. index.html is fetched fresh on every load
+// so app updates are always picked up (fallback to cache only when offline).
 const SHELL_URLS = [
-  '/',
-  '/index.html',
-  '/icon.svg',
-  '/manifest.json',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 ];
@@ -32,19 +30,21 @@ self.addEventListener('fetch', event => {
 
   const url = new URL(req.url);
 
-  // OSM tiles — cache-first, tiles never change
+  // OSM tiles — cache-first (tiles never change for a given z/x/y)
   if (url.hostname === 'tile.openstreetmap.org') {
     event.respondWith(cacheFirst(req, TILES_CACHE));
     return;
   }
 
-  // API — network-first, fall back to cache when offline
-  if (url.origin === self.location.origin && (url.pathname.startsWith('/spots') || url.pathname.startsWith('/settings'))) {
-    event.respondWith(networkFirst(req, API_CACHE));
+  // Anything on our own origin — network-first, cache is offline fallback.
+  // This ensures HTML/JS/manifest updates are always picked up on next reload.
+  if (url.origin === self.location.origin) {
+    const isApi = url.pathname.startsWith('/spots') || url.pathname.startsWith('/settings') || url.pathname.startsWith('/discovery');
+    event.respondWith(networkFirst(req, isApi ? API_CACHE : SHELL_CACHE));
     return;
   }
 
-  // App shell + Leaflet CDN — cache-first
+  // External assets (Leaflet CDN, etc.) — cache-first
   event.respondWith(cacheFirst(req, SHELL_CACHE));
 });
 

@@ -22,6 +22,9 @@ public class ApiKeyFilter implements ContainerRequestFilter {
     @Override
     public void filter(ContainerRequestContext ctx) {
         if ("GET".equals(ctx.getMethod())) return;
+        // Low-value tracking endpoint — no bomkod needed
+        String path = ctx.getUriInfo().getPath();
+        if (path != null && path.replaceAll("^/+", "").equals("discovery/interest")) return;
 
         String provided = ctx.getHeaderString("X-Api-Key");
         if (!apiKey.equals(provided)) {

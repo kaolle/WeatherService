@@ -208,7 +208,9 @@
     <h2 id="modal-title">✏️ Redigera spot</h2>
     <input type="hidden" id="edit-id">
     <input type="hidden" id="edit-osm-id">
+    <input type="hidden" id="edit-pending-id">
     <p id="osm-save-note" hidden style="font-size:0.85rem;margin-bottom:14px;color:#bae6fd">Från OpenStreetMap. Kontrollera platsen och fyll i spottyp, svårighetsgrad, bästa vindriktningar och vindgränser innan du sparar.</p>
+    <p id="pending-save-note" hidden style="font-size:0.85rem;margin-bottom:14px;color:#fbbf24">Väntande OSM-fynd. Fyll i spottyp, svårighetsgrad, bästa vindriktningar och vindgränser för att godkänna, eller ta bort om det inte är en surfspot.</p>
     <div class="form-row">
       <label>Position</label>
       <div class="position-fields">
@@ -277,6 +279,7 @@
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Avbryt</button>
+      <button id="btn-discard-pending" class="btn-cancel" hidden style="color:#f87171" onclick="discardPending()">🗑 Ta bort</button>
       <button class="btn-save" onclick="saveSpot()">💾 Spara</button>
     </div>
   </div>
@@ -297,6 +300,10 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+  const APP_VERSION = 'v3-pending-discovery';
+  console.log(`[boot] script loaded ${APP_VERSION}`);
+  window.addEventListener('error', e => console.error('[boot] script error', e.error || e.message));
+
   const DEFAULT_CENTER = [58.0, 16.5];
   const DEFAULT_ZOOM = 6;
   const COLORS = {
@@ -361,6 +368,7 @@
   let allSpots = [], markers = {}, activeRow = null;
   let addMode = false, addMarker = null, positionPickMode = false;
   let discoveries = [], discoveryMarkers = {}, discoveryRequest = 0, discoveryController = null;
+  let pendingSpots = [], pendingMarkers = {}, pendingRequest = 0;
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -373,6 +381,12 @@
     Object.values(discoveryMarkers).forEach(marker => map.removeLayer(marker));
     discoveryMarkers = {};
     document.getElementById('discovery-status').hidden = true;
+  }
+
+  function clearPending() {
+    pendingSpots = [];
+    Object.values(pendingMarkers).forEach(marker => map.removeLayer(marker));
+    pendingMarkers = {};
   }
 
   async function discoverMapArea(generation) {
@@ -436,6 +450,89 @@
       document.getElementById('edit-' + field).value = value || '';
     }
     map.closePopup();
+  }
+
+  function postViewportInterest() {
+    const bounds = map.getBounds();
+    const south = bounds.getSouth(), north = bounds.getNorth();
+    const width = bounds.getEast() - bounds.getWest();
+    const center = map.getCenter().wrap();
+    const west = center.lng - width / 2, east = center.lng + width / 2;
+    if (north - south > 8 || width > 8) {
+      console.log(`[interest] too zoomed out (span ${(north-south).toFixed(1)}°×${width.toFixed(1)}°) — skipping`);
+      return;
+    }
+    console.log(`[interest] POST bbox ${south.toFixed(2)},${west.toFixed(2)} → ${north.toFixed(2)},${east.toFixed(2)}`);
+    fetch('/discovery/interest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ south, west, north, east })
+    }).catch(() => {}); // fire-and-forget
+  }
+
+  async function loadPending() {
+    const bounds = map.getBounds();
+    const width = bounds.getEast() - bounds.getWest();
+    if (bounds.getNorth() - bounds.getSouth() > 8 || width > 8) { clearPending(); return; }
+    const center = map.getCenter().wrap();
+    const west = center.lng - width / 2, east = center.lng + width / 2;
+    const request = ++pendingRequest;
+    try {
+      const params = new URLSearchParams({ south: bounds.getSouth(), west, north: bounds.getNorth(), east });
+      const res = await fetch('/spots/pending?' + params);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (request !== pendingRequest) return;
+      pendingSpots = data;
+      renderPending();
+    } catch (_) { /* silent */ }
+  }
+
+  function renderPending() {
+    Object.values(pendingMarkers).forEach(marker => map.removeLayer(marker));
+    pendingMarkers = {};
+    for (const p of pendingSpots) {
+      const marker = L.circleMarker([p.latitude, p.longitude], {
+        radius: 10, color: '#fbbf24', fillColor: '#0f2640', fillOpacity: 0.85, weight: 3, dashArray: '3 3'
+      }).addTo(map);
+      const content = document.createElement('div');
+      content.innerHTML = `<div class="popup-name">${escapeHtml(p.name)}</div>
+        <div class="popup-desc" style="color:#fbbf24">Väntande OSM-fynd</div>
+        <p class="popup-desc">Fyll i vinddata för att godkänna, eller ta bort om det inte är en surfspot.</p>
+        <button class="edit-btn">Granska & godkänn</button>`;
+      content.querySelector('button').addEventListener('click', () => openPendingSpot(p));
+      pendingMarkers[p.id] = marker.bindPopup(content);
+    }
+    locationMarker?.bringToFront();
+  }
+
+  function openPendingSpot(p) {
+    openAdd(p.latitude, p.longitude);
+    document.getElementById('edit-pending-id').value = p.id;
+    document.getElementById('pending-save-note').hidden = false;
+    document.getElementById('btn-discard-pending').hidden = false;
+    document.getElementById('modal-title').textContent = 'Godkänn OSM-fynd';
+    for (const [field, value] of Object.entries({ name:p.name, region:p.region, desc:p.description, access:p.accessInfo, type:'', diff:'', min:'', ideal:'', max:'' })) {
+      document.getElementById('edit-' + field).value = value || '';
+    }
+    map.closePopup();
+  }
+
+  async function discardPending() {
+    const id = document.getElementById('edit-pending-id').value;
+    if (!id) return;
+    if (!confirm('Ta bort detta OSM-fynd? Det kan hittas igen vid nästa bakgrundssökning.')) return;
+    try {
+      const res = await authFetch(`/spots/${encodeURIComponent(id)}/pending`, { method: 'DELETE' });
+      if (!res) return;
+      if (!res.ok) throw new Error(await res.text());
+      closeModal();
+      pendingSpots = pendingSpots.filter(p => p.id !== id);
+      renderPending();
+      setStatus('✓ OSM-fyndet togs bort');
+    } catch (e) {
+      alert('Fel: ' + e.message);
+    }
   }
 
   function toggleSpotList() {
@@ -697,7 +794,10 @@
 
   function openAdd(lat, lon) {
     document.getElementById('edit-osm-id').value = '';
+    document.getElementById('edit-pending-id').value = '';
     document.getElementById('osm-save-note').hidden = true;
+    document.getElementById('pending-save-note').hidden = true;
+    document.getElementById('btn-discard-pending').hidden = true;
     document.getElementById('edit-id').value = '';
     document.getElementById('edit-lat').value = lat.toFixed(5);
     document.getElementById('edit-lon').value = lon.toFixed(5);
@@ -745,6 +845,9 @@
 
   // ---- Edit modal ----
   function openEdit(spotId) {
+    document.getElementById('edit-pending-id').value = '';
+    document.getElementById('pending-save-note').hidden = true;
+    document.getElementById('btn-discard-pending').hidden = true;
     document.getElementById('edit-osm-id').value = '';
     document.getElementById('osm-save-note').hidden = true;
     const r = allSpots.find(s => s.spot.id === spotId);
@@ -783,7 +886,9 @@
 
   async function saveSpot() {
     const id = document.getElementById('edit-id').value;
-    const isAdd = !id;
+    const pendingId = document.getElementById('edit-pending-id').value;
+    const isAdd = !id && !pendingId;
+    const isApprove = !!pendingId;
     const osmId = document.getElementById('edit-osm-id').value;
     const dirs = [...document.querySelectorAll('.dirs-grid input:checked')].map(cb => cb.value);
     const name = document.getElementById('edit-name').value.trim();
@@ -809,21 +914,27 @@
       alert('Ange en giltig position.');
       return;
     }
-    if (body.osmId && (!body.type || !body.difficulty || !dirs.length || !(body.minWindSpeed > 0 && body.minWindSpeed < body.idealWindSpeed && body.idealWindSpeed < body.maxWindSpeed))) {
-      alert('Komplettera spottyp, svårighetsgrad, bästa vindriktningar och vindgränser (min < ideal < max) innan du sparar OSM-fyndet.');
+    const requiresWindData = body.osmId || isApprove;
+    if (requiresWindData && (!body.type || !body.difficulty || !dirs.length || !(body.minWindSpeed > 0 && body.minWindSpeed < body.idealWindSpeed && body.idealWindSpeed < body.maxWindSpeed))) {
+      alert('Komplettera spottyp, svårighetsgrad, bästa vindriktningar och vindgränser (min < ideal < max) innan du sparar.');
       return;
     }
 
     try {
-      const url = isAdd ? '/spots' : `/spots/${id}`;
-      const method = isAdd ? 'POST' : 'PUT';
+      let url, method;
+      if (isApprove)   { url = `/spots/${encodeURIComponent(pendingId)}/approve`; method = 'POST'; }
+      else if (isAdd)  { url = '/spots'; method = 'POST'; }
+      else             { url = `/spots/${id}`; method = 'PUT'; }
       const res = await authFetch(url, { method, body: JSON.stringify(body) });
       if (!res) return;
       if (!res.ok) throw new Error(await res.text());
       closeModal();
-      setStatus(`✓ ${name} ${isAdd ? 'tillagd' : 'sparad'} — laddar om…`);
+      const verb = isApprove ? 'godkänd' : (isAdd ? 'tillagd' : 'sparad');
+      setStatus(`✓ ${name} ${verb} — laddar om…`);
+      if (isApprove) pendingSpots = pendingSpots.filter(p => p.id !== pendingId);
       const center = map.getCenter();
       await loadSpots(center.lat, center.lng);
+      renderPending();
     } catch (e) {
       alert('Fel vid sparning: ' + e.message);
     }
@@ -1001,10 +1112,15 @@
   });
 
   map.on('moveend', () => {
+    console.log('[moveend] fired');
     updateList();
     scheduleVisibleAreaLoad();
+    postViewportInterest();
+    loadPending();
   });
   loadSpots(58.0, 16.5);
+  loadPending();
+  postViewportInterest();
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

@@ -17,6 +17,9 @@ public class ExternalApiWireMockResource implements QuarkusTestResourceLifecycle
         server.start();
         String baseUrl = server.baseUrl();
         return Map.of(
+            "quarkus.scheduler.enabled", "false",
+            "quarkus.mongodb.database", "windsurf-test",
+            "quarkus.rest-client.nominatim.url", baseUrl,
             "quarkus.rest-client.open-meteo.url", baseUrl,
             "quarkus.rest-client.overpass.url", baseUrl,
             "quarkus.rest-client.overpass-discovery.url", baseUrl
@@ -31,7 +34,7 @@ public class ExternalApiWireMockResource implements QuarkusTestResourceLifecycle
         }
     }
 
-    static WireMockServer server() {
+    public static WireMockServer server() {
         if (server == null) throw new IllegalStateException("WireMock is not running");
         return server;
     }

@@ -271,4 +271,85 @@ public class SpotResource {
             "message", result.imported() + " nya spotar importerade från OSM"
         )).build();
     }
+
+    @GET
+    @Path("/pending")
+    @Operation(summary = "Pending (unapproved) spots discovered by background job")
+    public List<Map<String, Object>> getPending(
+        @QueryParam("south") double south, @QueryParam("west") double west,
+        @QueryParam("north") double north, @QueryParam("east") double east,
+        @QueryParam("limit") @DefaultValue("100") int limit
+    ) {
+        if (!Double.isFinite(south) || !Double.isFinite(west) || !Double.isFinite(north) || !Double.isFinite(east)
+            || south >= north || west >= east) return List.of();
+        return SpotEntity.<SpotEntity>find("approved", false).list().stream()
+            .filter(s -> s.latitude >= south && s.latitude <= north && s.longitude >= west && s.longitude <= east)
+            .limit(Math.max(1, Math.min(500, limit)))
+            .map(s -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", s.externalId);
+                m.put("name", s.name);
+                m.put("latitude", s.latitude);
+                m.put("longitude", s.longitude);
+                m.put("region", s.region);
+                m.put("description", s.description);
+                m.put("accessInfo", s.accessInfo);
+                m.put("source", s.source != null ? s.source.name() : null);
+                return m;
+            }).toList();
+    }
+
+    @POST
+    @Path("/{id}/approve")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Approve a pending spot after providing wind data")
+    public Response approveSpot(@PathParam("id") String id, UpdateSpotRequest req,
+                                @HeaderParam("X-User-Name") String userName) {
+        SpotEntity entity = SpotEntity.find("externalId", id).firstResult();
+        if (entity == null) return Response.status(404).entity(Map.of("error", "Spot ej hittad")).build();
+        if (req.type() == null || req.difficulty() == null
+            || req.bestDirections() == null || req.bestDirections().isEmpty()
+            || req.minWindSpeed() <= 0 || req.idealWindSpeed() <= 0 || req.maxWindSpeed() <= 0
+            || req.minWindSpeed() >= req.idealWindSpeed() || req.idealWindSpeed() >= req.maxWindSpeed()) {
+            return Response.status(400).entity(Map.of("error", "Ange spottyp, svårighetsgrad, vindriktningar och min < ideal < max-vind.")).build();
+        }
+        if ((req.latitude() != null && !Double.isFinite(req.latitude())) || (req.longitude() != null && !Double.isFinite(req.longitude()))
+                || (req.latitude() != null && (req.latitude() < -90 || req.latitude() > 90))
+                || (req.longitude() != null && (req.longitude() < -180 || req.longitude() > 180))) {
+            return Response.status(400).entity(Map.of("error", "Ogiltig position")).build();
+        }
+        if ((req.latitude() == null) != (req.longitude() == null)) {
+            return Response.status(400).entity(Map.of("error", "Latitud och longitud måste anges tillsammans")).build();
+        }
+        if (req.latitude() != null) entity.latitude = req.latitude();
+        if (req.longitude() != null) entity.longitude = req.longitude();
+        if (req.name() != null && !req.name().isBlank()) entity.name = req.name().strip();
+        if (req.description() != null) entity.description = req.description();
+        if (req.accessInfo() != null) entity.accessInfo = req.accessInfo();
+        if (req.region() != null && !req.region().isBlank()) entity.region = req.region();
+        entity.type = req.type();
+        entity.difficulty = req.difficulty();
+        entity.idealWindSpeed = req.idealWindSpeed();
+        entity.minWindSpeed   = req.minWindSpeed();
+        entity.maxWindSpeed   = req.maxWindSpeed();
+        entity.bestDirections = req.bestDirections();
+        entity.approved = true;
+        entity.updatedBy = userName;
+        entity.updatedAt = LocalDateTime.now().toString();
+        entity.update();
+        logChange(entity.externalId, entity.name, "APPROVED", userName, entity);
+        return Response.ok(Map.of("id", entity.externalId, "name", entity.name)).build();
+    }
+
+    @DELETE
+    @Path("/{id}/pending")
+    @Operation(summary = "Discard a pending OSM spot")
+    public Response discardPending(@PathParam("id") String id, @HeaderParam("X-User-Name") String userName) {
+        SpotEntity entity = SpotEntity.find("externalId", id).firstResult();
+        if (entity == null) return Response.status(404).entity(Map.of("error", "Spot ej hittad")).build();
+        if (entity.approved) return Response.status(409).entity(Map.of("error", "Spot är redan godkänd, använd redigering")).build();
+        logChange(entity.externalId, entity.name, "DISCARDED", userName, entity);
+        entity.delete();
+        return Response.ok(Map.of("id", id)).build();
+    }
 }

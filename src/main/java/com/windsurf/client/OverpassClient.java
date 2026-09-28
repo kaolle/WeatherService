@@ -2,10 +2,12 @@ package com.windsurf.client;
 
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
+import org.eclipse.microprofile.rest.client.annotation.ClientHeaderParam;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 
 @RegisterRestClient(configKey = "overpass")
 @Path("/api/interpreter")
+@ClientHeaderParam(name = "User-Agent", value = "WeatherService/1.0 (windsurf spot guide)")
 public interface OverpassClient {
 
     @POST
